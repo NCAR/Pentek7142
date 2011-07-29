@@ -23,21 +23,10 @@ _mutex()
 		return;
 	}
 
-	if (_devName.size() < 1)
-		return;
+	// initialize ReadyFlow
+	_ok = initReadyFlow();
 
-	// remove trailing slash
-	if (_devName[_devName.size()-1] == '/') {
-		_devName.erase(_devName.size()-1,1);
-	}
-
-	// If we're not simulating, open the control device
-	_devCtrl = _devName + "/ctrl";
-    _ctrlFd = open(_devCtrl.c_str(), O_RDWR);
-    if (_ctrlFd < 0) {
-        std::cerr << "Unable to open p71xx control device!" << std::endl;
-        return;
-    }
+	return;
 
 	_ok = true;
 }
@@ -45,8 +34,100 @@ _mutex()
 ////////////////////////////////////////////////////////////////////////////////////////
 p71xx::~p71xx() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
+
+    /* cleanup for exit */
+    PTK714X_DeviceClose(hDev);
+    PTK714X_LibUninit();
+    std::cout << "ReadyFlow closed" << std::endl;
+
+    return;
+
     if (_ctrlFd >= 0)
         close(_ctrlFd);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+bool
+p71xx::initReadyFlow() {
+	slot = -1;
+    hDev         = NULL;
+	intrStat     = PTK714X_STATUS_OK;
+	dmaBufStat   = PTK714X_STATUS_OK;
+	dmaHandle    = NULL;
+	adcData      = NULL;
+
+    /* initialize the PTK714X library */
+    DWORD dwStatus = PTK714X_LibInit();
+    if (dwStatus != PTK714X_STATUS_OK)
+    {
+        std::cerr << "Failed to initialize the PTK714X library" << std::endl;
+        return false;
+    }
+
+    /* Find and open a PTK714X device (by default ID) */
+    hDev = PTK714X_DeviceFindAndOpen(&slot, &BAR0Base, &BAR2Base);
+    if (hDev == NULL)
+    {
+        std::cerr << "Pentek 7142 device not found" << std::endl;
+    }
+
+    /* Initialize 7142 register address tables */
+    P7142InitRegAddr (BAR0Base, BAR2Base, &p7142Regs);
+
+    /* check if module is a 7142 */
+    P7142_GET_MODULE_ID(p7142Regs.BAR2RegAddr.idReadout, moduleId);
+    if (moduleId != P7142_MODULE_ID)
+    {
+        std::cerr << "Failed to identify a Pentek 7142 module." << std::endl;
+        return false;
+    }
+
+    std::cout << "Pentek 7142 device";
+    std::cout << std::hex << " BAR0: 0x" << (void *)BAR0Base;
+    std::cout << std::hex << " BAR2: 0x" << (void *)BAR2Base;
+    std::cout << std::dec;
+    std::cout <<std::endl;
+
+    /* Reset board registers to default values */
+    P7142ResetRegs (&p7142Regs);
+
+    /* Load parameter tables with default values */
+    P7142SetPciDefaults   (&p7142PciParams);
+    P7142SetDmaDefaults   (&p7142DmaParams);
+    P7142SetBoardDefaults (&p7142BoardParams);
+    P7142SetInputDefaults (&p7142InParams);
+    P7142SetOutputDefaults(&p7142OutParams);
+
+    // Board customization
+    p7142BoardParams.busASelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    p7142BoardParams.busAClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
+
+    // DAC customization
+    p7142OutParams.dacPllVdd = P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE;
+    p7142OutParams.dacClkSel = P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS;
+
+    /* Apply parameter table values to the 7142 registers */
+    P7142InitPciRegs    (&p7142PciParams,   &(p7142Regs.BAR0RegAddr));
+    P7142InitDmaRegs    (&p7142DmaParams,   &(p7142Regs.BAR0RegAddr));
+    P7142InitBoardRegs  (&p7142BoardParams, &(p7142Regs.BAR2RegAddr));
+    P7142InitInputRegs  (&p7142InParams,    &(p7142Regs.BAR2RegAddr));
+    P7142InitOutputRegs (&p7142OutParams,   &(p7142Regs.BAR2RegAddr));
+
+    // set the pointers for the sd3c control registers
+    svnRevReg   = (DWORD*)(BAR2Base + 0x8000 + 8*481);
+    tcvrCtrlReg = (DWORD*)(BAR2Base + 0x8000 + 8*463);
+
+    /// @todo Enable free run for now. Will need to remove this later
+    *tcvrCtrlReg = 1;
+
+    std::cout
+    	<< "sd3c revision: "
+    	<< (*svnRevReg & 0x3fff)
+    	<< "  ddc type: "
+    	<< ((*svnRevReg >> 14) & 0x3)
+    	<< std::endl;
+
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

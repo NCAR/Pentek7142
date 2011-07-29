@@ -79,7 +79,7 @@ class p7142Dn {
         friend class p7142;
         
         /// Constructor
-        /// @param myP7142Ptr a pointer to the owner p7142 object
+        /// @param p7142 a pointer to the owner p7142 object
         /// @param chanId The channel identifier (used to select /dn/*B)
         /// @param bypassdivrate The bypass divider (decimation) rate
         /// @param simulate Set true if we operate in simulation mode.
@@ -89,7 +89,7 @@ class p7142Dn {
         /// in simulation mode. This simulates the output of the coherent integrator.
         /// @param internalClock Set true if the internal clock should be
         /// used instead of an external clock source.
-        p7142Dn(p7142 * myP7142Ptr,
+        p7142Dn(p7142 * p7142,
                 int chanId, 
                 int bypassdivrate = 1,
                 int simWaveLength = 5000,

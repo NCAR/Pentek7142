@@ -14,6 +14,7 @@
 
 
 namespace Pentek {
+	class p7142Up;
 
 	/// Base class for a p7142 digital transceiver card.
 	class p7142 : public p71xx {
@@ -47,15 +48,14 @@ namespace Pentek {
                     int simWavelength = 5000, bool sim4bytes = false);
             
             /// Construct and add an upconverter for our device.
-            /// @param upName The name of the downconverter device, e.g. 0C
             /// @param sampleClockHz The DAC sample clock in Hz
             /// @param ncoFreqHz The NCO frequency in Hz
             /// @param mode The DAC CONFIG2 coarse mixer mode (See DAC5687 Data Sheet)
-            virtual p7142Up * addUpconverter(std::string upName, 
+            virtual p7142Up * addUpconverter(
                     double sampleClockHz, double ncoFreqHz, char mode);
             
             // We make our associated downconverter and upconverter classes 
-            // friends so that they have access to _ctrlFd, the doIoctl()
+            // friends so that they have access to BAR registers, etc.
             // methods, etc.
             friend class p7142Dn;
             friend class p7142Up;
@@ -96,8 +96,34 @@ namespace Pentek {
             /// must call this method whenever they change their clock source
             /// via the CLKSRCSET ioctl!</em>
             void _resetDCM();
-
+            /// Borrowed shamelessly from dmem_dac.c in the readyflow examples
+            ///
+            /// Write data to the selected DDR memory bank, using DMA Channel 7.
+            /// @param p7142Regs Pointer to the 7142 register addres table
+            /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
+            /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
+            /// @param bankStartAddr Address in the bank at which to start reading
+            /// @param bankDepth Number of bytes to write. Yes, BYTES
+            /// @param dataBuf Nointer to the data buffer containing the data
+            /// @param hDev The 7142 Device Handle
+            /// @returns <br>
+            /// 0 - successful <br>
+            /// 1 - invalid bank number  <br>
+            /// 2 - invalid start address  <br>
+            /// 3 - bank depth extends past the end of the DDR bank <br>
+            /// 4 - DMA channel failed to open <br>
+            /// 5 - DMA buffer allocation failed <br>
+            /// 6 - semaphore creation failed <br>
+            /// 7 - semaphore wait timed out
+            int ddrMemWrite (P7142_REG_ADDR* p7142Regs,
+                             unsigned int    bank,
+                             unsigned int    bankStartAddr,
+                             unsigned int    bankDepth,
+                             int32_t*   dataBuf,
+                             PVOID           hDev);
+            /// The down converters attached to this device
 			std::vector<p7142Dn*> _downconverters;
+			/// The upconverters attached to this device
 			p7142Up * _upconverter;
 	};
 

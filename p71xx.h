@@ -6,11 +6,52 @@
 #include "math.h"
 #include <string>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <semaphore.h>
+#include <signal.h>
+
+#ifdef OPT_428
+#include "ptk7142_428.h"
+#else
+#include "ptk7142.h"
+#endif
+
+// Use the following reference for now, so that we
+// get the 7142.h file from the ReadyFlow tree, rather than
+// the one of the same name that is in the Pentek Linux driver
+// tree.
+/// @todo Remove readyflow/include once we have eliminated all of the
+/// Pentek Linux driver code from the pentek access library.
+#include "readyflow/include/7142.h"
+
 #include <boost/thread/recursive_mutex.hpp>
 
 namespace Pentek {
 
 	/// Base class for a p7142 digital transceiver card.
+	///
+    /// ReadyFlow seems to have two methods of configuration manipulation. At
+    /// the highest level, a structure with fields corresponding
+    /// to many of the GateFLow options is provided for each subsystem. The
+    /// subsystems are PCI, DMA, board, input (A/D) and output (D/A).
+	/// The user initializes a structure using a SetDefault() call,
+	/// e.g. P7142SetPCIDefaults(). Individual fields in the structure are
+	/// modified to configure for non-default behavior. The structure is then
+	/// written to the board registers with an InitRegs() call, e.g.
+	/// P7142InitPCIRegs().
+	///
+	/// ReadyFlow also provides get/set macros for manipulating individual
+	/// control bits. So, once a section has had a complete initial configuration
+	/// using InitRegs(), the  macros can be used to access individual
+	/// control bits as needed. In fact, the InitRegs() functions are built
+	/// around these macros.
+	///
+	/// The approach taken here will be to initialize the entire board in
+	/// p71xx. The associated p7142Dn and p7142Up classes will use the
+	/// ReadyFlow macros as needed.
+
 	class p71xx {
 
 		public:
@@ -32,6 +73,8 @@ namespace Pentek {
 			bool isSimulating() const { return _simulate; }
 
 		protected:
+			/// Initialize the ReadyFlow library.
+			bool initReadyFlow();
             /// Return the file descriptor for the control device.
             /// @return the file descriptor for the control device.
             int ctrlFd() { return _ctrlFd; }
@@ -74,6 +117,24 @@ namespace Pentek {
             /// @param bufN The driver buffer will be this factor times intbufsize
             /// @return 0 on success, -1 on failure.
             static int bufset(int fd, int intbufsize, int bufN);
+            sem_t wdSemKey;
+            void* hDev;
+            DWORD intrStat;
+            DWORD libStat;
+            DWORD dmaBufStat;
+            PTK714X_DMA_HANDLE* dmaHandle;
+            PTK714X_DMA_BUFFER  dmaBuf;
+            DWORD           BAR0Base;          /* PCI BAR0 base address */
+            DWORD           BAR2Base;          /* PCI BAR2 base address */
+            DWORD           slot;
+            unsigned int    moduleId;
+            P7142_REG_ADDR            p7142Regs;
+            P7142_PCI_PARAMS          p7142PciParams;      /* PCI7142 PCI params */
+            P7142_DMA_PARAMS          p7142DmaParams;      /* PCI7142 DMA params */
+            P7142_BOARD_PARAMS        p7142BoardParams;    /* board params       */
+            P7142_INPUT_PARAMS        p7142InParams;       /* input block params */
+            P7142_OUTPUT_PARAMS       p7142OutParams;      /* output block params */
+            int* adcData;
             /// Indicated the success of the last operation.
             bool _ok;
             /// The root device name
@@ -86,6 +147,11 @@ namespace Pentek {
             bool _simulate;
             /// recursive mutex which provides us thread safety.
             mutable boost::recursive_mutex _mutex;
+            /// Pointer to the sd3c revision register in the signal fpga.
+            DWORD* svnRevReg;
+            /// Pointer to the sd3c transceiver control register in the fpga.
+            DWORD* tcvrCtrlReg;
+
 	};
 }
 

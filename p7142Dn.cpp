@@ -20,13 +20,13 @@ using namespace Pentek;
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142Dn::p7142Dn(
-        p7142 * myP7142Ptr,
+        p7142 * p7142,
         int chanId,
         int bypassdivrate,
         int simWaveLength,
         bool sim4bytes,
         bool internalClock):
-  _p7142(*myP7142Ptr),
+  _p7142(*p7142),
   _chanId(chanId),
   _dnFd(-1),
   _simWaveLength(simWaveLength),

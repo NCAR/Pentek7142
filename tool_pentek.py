@@ -19,6 +19,7 @@ PENTEK_INCLUDE = os.path.join('$PENTEK_ROOT', 'include')
 
 tools = Split("""
 boost_mutex
+readyflow
 doxygen
 """)
 
@@ -61,10 +62,12 @@ libpentek = env.Library('pentek', libsources)
 
 html = env.Apidocs(libsources + headers, DOXYFILE_FILE = "Doxyfile")
 
-Default(libpentek, html)
+#Default(libpentek, html)
+Default(libpentek)
 
 thisdir = env.Dir('.').srcnode().abspath
 def pentek(env):
+    env.AppendUnique(CPPPATH   =[thisdir,])
     env.AppendUnique(CPPPATH   =[thisdir, PENTEK_INCLUDE,])
     env.AppendUnique(CPPDEFINES=['PENTEK_LINUX',])
     env.AppendLibrary('pentek')

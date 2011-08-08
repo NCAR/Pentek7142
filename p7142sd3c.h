@@ -180,29 +180,14 @@ public:
     /// @param data The value to be written.
     void TTLOut(unsigned short int data);
 
-    /// Return our DDC type
     /// @return the DDC type instantiated in our card's firmware
-    DDCDECIMATETYPE ddcType() const { return _ddcType; }
+    DDCDECIMATETYPE ddcType();
     
-    /// Return the name of the firmware DDC type
     /// @return the name of the firmware DDC type
-    std::string ddcTypeName() const { return ddcTypeName(_ddcType); }
+    std::string ddcTypeName() const;
     
-    /// Return the name of the given DDCDECIMATETYPE
-    static std::string ddcTypeName(DDCDECIMATETYPE type) {
-        switch (type) {
-        case DDC10DECIMATE:
-            return std::string("DDC10DECIMATE");
-        case DDC8DECIMATE:
-            return std::string("DDC8DECIMATE");
-        case DDC4DECIMATE:
-            return std::string("DDC4DECIMATE");
-        case BURST:
-            return std::string("BURST");
-        default:
-            return std::string("Unknown");
-        }
-    }
+    /// @return the name of the given DDCDECIMATETYPE
+    static std::string ddcTypeName(DDCDECIMATETYPE type);
 
     /// Set the filter start bit, which starts the data flow for all channels.
     void startFilters();
@@ -376,9 +361,6 @@ protected:
     /// If _freerun is true, set the FREERUN bit in the
     /// transceiver control register. Otherwise clear it.
     void loadFreeRun();
-
-    /// @return The sd3c firmware type.
-    DDCDECIMATETYPE ddcType();
 
     /// @return The sd3c firmware revision number.
     int sd3cRev();

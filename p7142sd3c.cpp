@@ -68,7 +68,7 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     _ddcType = ddcType();
 
     // Announce the FPGA firmware revision
-    std::cout << _devName << " SD3C revision: " << _sd3cRev << std::endl;
+    std::cout << _devName << " SD3C revision: " << std::dec << _sd3cRev << std::endl;
     if (_sd3cRev == 0) {
         std::cerr << "** WARNING: Revision number is zero. " <<
                 "Was the correct firmware loaded?" << std::endl;
@@ -383,6 +383,7 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
         return _simulateDDCType;
     
     unsigned int ddcTypeAndRev = sd3cTypeAndRev();
+    std::cout << "std type and rev " << std::hex << ddcTypeAndRev << std::dec << std::endl;
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
@@ -627,6 +628,28 @@ int64_t p7142sd3c::pulseAtTime(ptime time) const {
     }
     
     return(pulseNum);
+}
+
+//////////////////////////////////////////////////////////////////////
+std::string p7142sd3c::ddcTypeName(DDCDECIMATETYPE type) {
+    switch (type) {
+    case DDC10DECIMATE:
+        return std::string("DDC10DECIMATE");
+    case DDC8DECIMATE:
+        return std::string("DDC8DECIMATE");
+    case DDC4DECIMATE:
+        return std::string("DDC4DECIMATE");
+    case BURST:
+        return std::string("BURST");
+    default:
+        return std::string("Unknown");
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+std::string p7142sd3c::ddcTypeName() const
+{
+	return ddcTypeName(_ddcType);
 }
 
 } // end namespace Pentek

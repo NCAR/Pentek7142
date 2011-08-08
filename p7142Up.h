@@ -55,7 +55,6 @@ class p7142Up {
         /// @return The dac clock in Hz.
         double sampleClockHz();
 
-    protected:
         // Class p7142 is a friend; the intention is that construction of
         // p7142Up will happen only from there...
         friend class p7142;
@@ -68,6 +67,7 @@ class p7142Up {
         p7142Up(p7142 * p7142ptr, double sampleClockHz,
                 double ncoFreqHz, char cmMode);
 
+    protected:
         /// Initialize the DAC hardware. Register level calls are
         /// made to manipulate the internal DAC configuration registers.
         bool initDAC();

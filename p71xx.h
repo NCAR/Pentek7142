@@ -51,7 +51,6 @@ namespace Pentek {
 	/// The approach taken here will be to initialize the entire board in
 	/// p71xx. The associated p7142Dn and p7142Up classes will use the
 	/// ReadyFlow macros as needed.
-
 	class p71xx {
 
 		public:
@@ -71,37 +70,12 @@ namespace Pentek {
 			/// Return true iff we're in simulation mode.
 			/// @return true iff we're in simulation mode.
 			bool isSimulating() const { return _simulate; }
+            void stop();
+            void start();
 
 		protected:
 			/// Initialize the ReadyFlow library.
 			bool initReadyFlow();
-            /// Return the file descriptor for the control device.
-            /// @return the file descriptor for the control device.
-            int ctrlFd() { return _ctrlFd; }
-            /// Process an ioctl.
-		    /// @param fd The file descriptor
-		    /// @param ioctlCode The ioctl code.
-		    /// @param arg The ioctl argument
-		    /// @param errMsg an error message to print if the ioctl fails
-		    /// @param doexit If true, call exit(1) if the ioctl returns -1
-		    /// @return The result of the ioctl call.
-			static int doIoctl(int fd, int ioctlCode, void* arg, std::string errMsg, bool doexit=true);
-		    /// Process an ioctl.
-		    /// @param fd The file descriptor
-		    /// @param ioctlCode The ioctl code.
-		    /// @param arg The ioctl argument
-		    /// @param errMsg an error message to print if the ioctl fails
-		    /// @param doexit If true, call exit(1) if the ioctl returns -1
-		    /// @return The result of the ioctl call.
-			static int doIoctl(int fd, int ioctlCode, int arg, std::string errMsg, bool doexit=true);
-		    /// Process an ioctl.
-		    /// @param fd The file descriptor
-		    /// @param ioctlCode The ioctl code.
-		    /// @param arg The ioctl argument
-		    /// @param errMsg an error message to print if the ioctl fails
-		    /// @param doexit If true, call exit(1) if the ioctl returns -1
-		    /// @return The result of the ioctl call.
-			static int doIoctl(int fd, int ioctlCode, double arg, std::string errMsg, bool doexit=true);
 			/// Create a random number, with Gaussian distribution about a 
 			/// selected mean and with selected standard deviation.
             /// Useful for simulation
@@ -117,26 +91,36 @@ namespace Pentek {
             /// @param bufN The driver buffer will be this factor times intbufsize
             /// @return 0 on success, -1 on failure.
             static int bufset(int fd, int intbufsize, int bufN);
-            sem_t wdSemKey;
+            /// Configure the board parameters, in p7142BoardParams
+            void configBoardParameters();
+            /// Configure the DMA parameters, in p7142DmaParams
+            void configDmaParameters();
+            /// Configure the In parameters, in p7142InParams
+            void configInParameters();
+            /// Configure the Out parameters, in p7142OutParams
+            void configOutParameters();
+            /// Configure the DAC parameters, in p7142Dac5686Params
+            void configDacParameters();
+            void start(int chan);
+            void stop(int chan);
+
             void* hDev;
-            DWORD intrStat;
-            DWORD libStat;
-            DWORD dmaBufStat;
-            PTK714X_DMA_HANDLE* dmaHandle;
-            PTK714X_DMA_BUFFER  dmaBuf;
+            PTK714X_DMA_HANDLE* dmaHandle[4];
+            PTK714X_DMA_BUFFER  dmaBuf[4];
             DWORD           BAR0Base;          /* PCI BAR0 base address */
             DWORD           BAR2Base;          /* PCI BAR2 base address */
             DWORD           slot;
             unsigned int    moduleId;
-            P7142_REG_ADDR            p7142Regs;
-            P7142_PCI_PARAMS          p7142PciParams;      /* PCI7142 PCI params */
-            P7142_DMA_PARAMS          p7142DmaParams;      /* PCI7142 DMA params */
-            P7142_BOARD_PARAMS        p7142BoardParams;    /* board params       */
-            P7142_INPUT_PARAMS        p7142InParams;       /* input block params */
-            P7142_OUTPUT_PARAMS       p7142OutParams;      /* output block params */
+            P7142_REG_ADDR       p7142Regs;
+            P7142_PCI_PARAMS     p7142PciParams;      /* PCI7142 PCI params */
+            P7142_DMA_PARAMS     p7142DmaParams;      /* PCI7142 DMA params */
+            P7142_BOARD_PARAMS   p7142BoardParams;    /* board params       */
+            P7142_INPUT_PARAMS   p7142InParams;       /* input block params */
+            P7142_OUTPUT_PARAMS  p7142OutParams;      /* output block params */
+            P7142_DAC5686_PARAMS p7142Dac5686Params; /* DAC5686 params */
+            volatile unsigned int    *gateGenReg;
+
             int* adcData;
-            /// Indicated the success of the last operation.
-            bool _ok;
             /// The root device name
             std::string _devName;
             /// The ctrl device name
@@ -147,10 +131,10 @@ namespace Pentek {
             bool _simulate;
             /// recursive mutex which provides us thread safety.
             mutable boost::recursive_mutex _mutex;
-            /// Pointer to the sd3c revision register in the signal fpga.
-            DWORD* svnRevReg;
-            /// Pointer to the sd3c transceiver control register in the fpga.
-            DWORD* tcvrCtrlReg;
+            /// True if device is opened and accessible
+            bool _isReady;
+            /// true if an AD channel is running
+            bool _adcActive[4];
 
 	};
 }

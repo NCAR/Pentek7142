@@ -15,6 +15,7 @@
 
 namespace Pentek {
 	class p7142Up;
+	class p7142Dn;
 
 	/// Base class for a p7142 digital transceiver card.
 	class p7142 : public p71xx {
@@ -44,14 +45,14 @@ namespace Pentek {
             /// @param sim4bytes Create 4 byte instead of 2 byte integers when
             /// in simulation mode. This simulates the output of the coherent 
             /// integrator.
-            virtual p7142Dn * addDownconverter(int chanId, int bypassdivrate = 1,
+            virtual p7142Dn* addDownconverter(int chanId, int bypassdivrate = 1,
                     int simWavelength = 5000, bool sim4bytes = false);
             
             /// Construct and add an upconverter for our device.
             /// @param sampleClockHz The DAC sample clock in Hz
             /// @param ncoFreqHz The NCO frequency in Hz
             /// @param mode The DAC CONFIG2 coarse mixer mode (See DAC5687 Data Sheet)
-            virtual p7142Up * addUpconverter(
+            virtual p7142Up* addUpconverter(
                     double sampleClockHz, double ncoFreqHz, char mode);
             
             // We make our associated downconverter and upconverter classes 
@@ -67,23 +68,14 @@ namespace Pentek {
             /// channel will be deleted. This object assumes ownership of the 
             /// incoming downconverter.
             /// @param downconverter the downconverter to be added.
-            void _addDownconverter(p7142Dn * downconverter);
+            void addDownconverter(p7142Dn* downconverter);
             
             /// Add (or replace) our upconverter. If we already have an
             /// upconverter, it will be deleted. This object assumes ownership 
             /// of the incoming upconverter.
             /// @param upconverter the upconverter to be added.
-            void _addUpconverter(p7142Up * upconverter);
+            void _addUpconverter(p7142Up* upconverter);
             
-            /// Perform an ioctl call to the control device using the given address
-            /// offset and value. The resulting value is returned.
-            /// @param request The ioctl request type.
-            /// @param offset The address offset for the ioctl request.
-            /// @param value The value to pass in the ioctl call.
-            /// @return The value returned by the ioctl call.
-            unsigned int _controlIoctl(unsigned int request, 
-                    unsigned int offset, unsigned int value = 0);
-                    
             /// Perform a FIOREGGET ioctl call to the control device for the 
             /// given address. The resulting value is returned.
             /// @param addr The address of the register to get.
@@ -95,7 +87,7 @@ namespace Pentek {
             /// CLKFX output, which won't lock at startup. <em>Downconverters
             /// must call this method whenever they change their clock source
             /// via the CLKSRCSET ioctl!</em>
-            void _resetDCM();
+            void resetDCM();
             /// Borrowed shamelessly from dmem_dac.c in the readyflow examples
             ///
             /// Write data to the selected DDR memory bank, using DMA Channel 7.
@@ -124,7 +116,7 @@ namespace Pentek {
             /// The down converters attached to this device
 			std::vector<p7142Dn*> _downconverters;
 			/// The upconverters attached to this device
-			p7142Up * _upconverter;
+			p7142Up* _upconverter;
 	};
 
 } // end namespace Pentek

@@ -166,9 +166,6 @@ public:
         return(_staggeredPrt ? _prt2Counts : 0);
     }
     
-    /// @return The FPGA firmware software repository revision number.
-    unsigned int fpgaRepoRevision() const { return _fpgaRepoRev; }
-
     /// Set the time of the first transmit pulse.
     /// @param startTime The boost::posix_time::ptime of the first transmit
     ///    pulse.
@@ -219,7 +216,7 @@ public:
     
     /// Return the transmit pulse width, in local counts, which are units of 
     /// (2 / adc_freq) seconds.
-    int txPulseWidthCounts() const { return _timerWidth(TX_PULSE_TIMER); }
+    int txPulseWidthCounts() const { return timerWidth(TX_PULSE_TIMER); }
     
     /// Set up general purpose timer 0. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
@@ -227,7 +224,7 @@ public:
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer0(double delay, double width, bool invert = false) {
-        _setTimer(GP_TIMER_0, timeToCounts(delay), timeToCounts(width), true, invert);
+        setTimer(GP_TIMER_0, timeToCounts(delay), timeToCounts(width), true, invert);
     }
     
     /// Set up general purpose timer 1. This timer is not used internally by
@@ -236,7 +233,7 @@ public:
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer1(double delay, double width, bool invert = false) {
-        _setTimer(GP_TIMER_1, timeToCounts(delay), timeToCounts(width), true, invert);
+        setTimer(GP_TIMER_1, timeToCounts(delay), timeToCounts(width), true, invert);
     }
     
     /// Set up general purpose timer 2. This timer is not used internally by
@@ -245,7 +242,7 @@ public:
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer2(double delay, double width, bool invert = false) {
-        _setTimer(GP_TIMER_2, timeToCounts(delay), timeToCounts(width), true, invert);
+        setTimer(GP_TIMER_2, timeToCounts(delay), timeToCounts(width), true, invert);
     }
     
     /// Set up general purpose timer 3. This timer is not used internally by
@@ -253,7 +250,7 @@ public:
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     void setGPTimer3(double delay, double width, bool invert = false) {
-        _setTimer(GP_TIMER_3, timeToCounts(delay), timeToCounts(width), true, invert);
+        setTimer(GP_TIMER_3, timeToCounts(delay), timeToCounts(width), true, invert);
     }
     
     /// Return the number of gates being sampled by our non-burst downconverters.
@@ -334,7 +331,7 @@ protected:
      *     interest
      * @return the timer delay in counts
      */
-    int _timerDelay(int timerNdx) const {
+    int timerDelay(int timerNdx) const {
         return(_timerConfigs[timerNdx].delay());
     }
     
@@ -346,7 +343,7 @@ protected:
      *     interest
      * @return the timer width in counts
      */
-    int _timerWidth(int timerNdx) const {
+    int timerWidth(int timerNdx) const {
         return(_timerConfigs[timerNdx].width());
     }
     
@@ -358,38 +355,37 @@ protected:
      *     interest
      * @return true if the timer is inverted
      */
-    bool _timerInvert(int timerNdx) const {
+    bool timerInvert(int timerNdx) const {
         return(_timerConfigs[timerNdx].invert());
     }
     
-    /**
-     * Set delay and width values for the selected timer. Note that values
-     * set here are not actually loaded onto the card until the timers are 
-     * started with timersStartStop().
-     * 
-     * @param ndx the TimerIndex for the timer to be set
-     * @param delay the delay in counts for the timer
-     * @param width the width in counts for the timer to be held on
-     * @param verbose set to true for verbose output
-     * @param invert set true to invert the timer output
-     */
-    void _setTimer(TimerIndex ndx, int delay, int width, bool verbose = true, bool invert = false);
+    /// Set delay and width values for the selected timer. Note that values
+    /// set here are not actually loaded onto the card until the timers are
+    /// started with timersStartStop().
+    /// @param ndx the TimerIndex for the timer to be set
+    /// @param delay the delay in counts for the timer
+    /// @param width the width in counts for the timer to be held on
+    /// @param verbose set to true for verbose output
+    /// @param invert set true to invert the timer output
+    void setTimer(TimerIndex ndx, int delay, int width, bool verbose = true, bool invert = false);
     
     /// Load configured timer values onto the device.
     /// @return true if successful, false otherwise.
-    bool _initTimers();
+    bool initTimers();
     
-    /**
-     * Load the device's FREERUN register.
-     */
-    void _loadFreeRun();
+    /// If _freerun is true, set the FREERUN bit in the
+    /// transceiver control register. Otherwise clear it.
+    void loadFreeRun();
 
-    /// @return Read the type of DDC instantiated in the firmware
-    DDCDECIMATETYPE _readDDCType();
-    
-    /// @return Read and return the FPGA firmware software repository revision 
-    /// number from the card.
-    unsigned int _readFpgaRepoRevision();
+    /// @return The sd3c firmware type.
+    DDCDECIMATETYPE ddcType();
+
+    /// @return The sd3c firmware revision number.
+    int sd3cRev();
+
+    /// @return The sd3c DDC type and software repository revision
+    /// number, as read from the FPGA.
+    unsigned int sd3cTypeAndRev();
 
     /**
      * Simple class to hold integer delay and width for a timer.
@@ -417,9 +413,10 @@ protected:
     /// @return operating mode: free run, pulse tag and coherent integration.
     OperatingMode _operatingMode() const { return _mode; }
     
-    /**
-     * vector of delay/width pairs for our 8 SD3C timers
-     */
+    /// Pointer to the sd3c transceiver control register in the fpga.
+    uint32_t* tcvrCtrlReg;
+
+     /// Vector of delay/width pairs for our 8 SD3C timers
     _TimerConfig _timerConfigs[N_SD3C_TIMERS];
     /// radar PRT in _adc_clock/2 counts
     unsigned int _prtCounts;
@@ -450,10 +447,10 @@ protected:
     DDCDECIMATETYPE _ddcType;
     /// DDC type to use when simulating (default DDC8DECIMATE).
     DDCDECIMATETYPE _simulateDDCType;
+    /// The SD3C firmware revision number
+    int _sd3cRev;
     /// The three operating modes: free run, pulse tag and coherent integration
     OperatingMode _mode;
-    /// The revision number reported by the FPGA firmware
-    unsigned int _fpgaRepoRev;
     /// Does radar start wait for an external trigger?
     bool _externalStartTrigger;
 };

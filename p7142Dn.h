@@ -12,9 +12,7 @@
 #include <boost/thread/recursive_mutex.hpp>
 
 namespace Pentek {
-
 class p7142;
-
 /*!
  * @brief A p7142 downconverter.
  * This class reads and controls downconversion for one receiver channel of a 
@@ -22,6 +20,28 @@ class p7142;
  */ 
 class p7142Dn {
     public:
+    // Class p7142 is a friend; the intention is that construction of
+    // p7142Dn will happen only from there...
+    friend class p7142;
+
+    /// Constructor
+    /// @param p7142 a pointer to the owner p7142 object
+    /// @param chanId The channel identifier (used to select /dn/*B)
+    /// @param bypassdivrate The bypass divider (decimation) rate
+    /// @param simulate Set true if we operate in simulation mode.
+    /// @param simWaveLength The wave length, in timeseries points, for the
+    /// simulated data. See read().
+    /// @param sim4bytes Create 4 byte instead of 2 byte integers when
+    /// in simulation mode. This simulates the output of the coherent integrator.
+    /// @param internalClock Set true if the internal clock should be
+    /// used instead of an external clock source.
+    p7142Dn(p7142* p7142,
+            int chanId,
+            int bypassdivrate = 1,
+            int simWaveLength = 5000,
+            bool sim4bytes = false,
+            bool internalClock = false);
+
         /// Destructor
         virtual ~p7142Dn();
         /// Read bytes.
@@ -44,9 +64,6 @@ class p7142Dn {
         /// Return the device path for the downconverter.
         /// @return The device path
         std::string dnName();
-        /// Return the file descriptor for the downconverter device.
-        /// @return The file descriptor.
-        int fd();
         /// flush the I/O buffers and hardware fifos
         void flush();
         /// Are we using the card's internal clock?
@@ -73,33 +90,10 @@ class p7142Dn {
          */
         bool isSimulating() const;
         
+
     protected:
-        // Class p7142 is a friend; the intention is that construction of
-        // p7142Dn will happen only from there...
-        friend class p7142;
-        
-        /// Constructor
-        /// @param p7142 a pointer to the owner p7142 object
-        /// @param chanId The channel identifier (used to select /dn/*B)
-        /// @param bypassdivrate The bypass divider (decimation) rate
-        /// @param simulate Set true if we operate in simulation mode.
-        /// @param simWaveLength The wave length, in timeseries points, for the
-        /// simulated data. See read().
-        /// @param sim4bytes Create 4 byte instead of 2 byte integers when
-        /// in simulation mode. This simulates the output of the coherent integrator.
-        /// @param internalClock Set true if the internal clock should be
-        /// used instead of an external clock source.
-        p7142Dn(p7142 * p7142,
-                int chanId, 
-                int bypassdivrate = 1,
-                int simWaveLength = 5000,
-                bool sim4bytes = false,
-                bool internalClock = false);
-        /// Return the file descriptor for the control device.
-        /// @return the file descriptor for the control device.
-        int ctrlFd() const;
         /// The P7142 which owns us...
-        p7142 & _p7142;
+        p7142& _p7142;
         /// Receiver channel number (0-3)
         int _chanId;
         /// The number of bytes read since the last call to bytesRead()

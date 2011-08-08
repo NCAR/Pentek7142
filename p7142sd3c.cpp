@@ -37,36 +37,9 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
         _nsum(nsum),
         _simulateDDCType(simulateDDCType),
         _externalStartTrigger(externalStartTrigger) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
-            
-    // Set up page and mask registers for FIOREGSET and FIOREGGET functions 
-    // to access FPGA registers. We use _pp for all of our ioctl() calls, so
-    // set it up before any ioctl-s!
-    _pp.page = 2; // PCIBAR 2
-    _pp.mask = 0;
-    
-    // Note the FPGA firmware revision
-    _fpgaRepoRev = _readFpgaRepoRevision();
-    std::cout << _devName << " FPGA revision: " << _fpgaRepoRev << std::endl;
-    if (_fpgaRepoRev == 0) {
-        std::cerr << "** WARNING: Revision number is zero. " <<
-                "Was the correct firmware loaded?" << std::endl;
-    }
-
-    // sanity check
-    if (_nsum < 1) {
-        std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<
-                std::endl;
-        abort();
-    }
-    
-    // Determine our operating mode
-    _mode = (_nsum > 1) ? MODE_CI : MODE_PULSETAG;
-    if (_freeRun)
-        _mode = MODE_FREERUN;
+	boost::recursive_mutex::scoped_lock guard(_mutex);
 
     // Set the ADC clock rate based on DDC type
-    _ddcType = _readDDCType();
     std::cout << _devName << " DDC type: " << ddcTypeName() << std::endl;
     switch (_ddcType) {
     case DDC10DECIMATE:
@@ -80,19 +53,45 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
         break;
     case BURST:
         _adc_clock = 100.0e6;
-        break;    
+        break;
     }
-    
+
+    // sanity check
+    if (_nsum < 1) {
+        std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<
+                std::endl;
+        abort();
+    }
+
+    // Get the firmware revison and ddc type from the FPGA.
+    _sd3cRev = sd3cRev();
+    _ddcType = ddcType();
+
+    // Announce the FPGA firmware revision
+    std::cout << _devName << " SD3C revision: " << _sd3cRev << std::endl;
+    if (_sd3cRev == 0) {
+        std::cerr << "** WARNING: Revision number is zero. " <<
+                "Was the correct firmware loaded?" << std::endl;
+    }
+
+    // Determine our operating mode
+    _mode = (_nsum > 1) ? MODE_CI : MODE_PULSETAG;
+    if (_freeRun) {
+        _mode = MODE_FREERUN;
+    }
+
     // stop the timers
     timersStartStop(false);
     
     // Write the gate count and coherent integration registers
     if (! isSimulating()) {
-        _controlIoctl(FIOREGSET, RADAR_GATES, gates);
-        _controlIoctl(FIOREGGET, RADAR_GATES);
+    	uint32_t temp;
 
-        _controlIoctl(FIOREGSET, CI_NSUM, nsum);
-        _controlIoctl(FIOREGGET, CI_NSUM);
+    	P7142_REG_WRITE(BAR2Base + RADAR_GATES, gates);
+    	P7142_REG_READ (BAR2Base + RADAR_GATES, temp);
+
+    	P7142_REG_WRITE(BAR2Base + CI_NSUM, nsum);
+    	P7142_REG_READ (BAR2Base + CI_NSUM, temp);
     }
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
@@ -105,20 +104,20 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     // Sync pulse timer. Note that the width of this timer must be at least
     // 140 ns to be recognized to be counted by the Acromag PMC730 Multi-IO
     // card pulse counter, and this counter is used by the Ka-band radar!
-    _setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9));
+    setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9));
     
     // tx pulse timer
     int txDelayCounts = timeToCounts(tx_delay);
     int pulseWidthCounts = timeToCounts(tx_pulsewidth);
-    _setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts);
+    setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts);
     
     std::cout << "downconverter: " << ddcTypeName(_ddcType) << std::endl;
 //    std::cout << "rx 0/1 delay:  " << _timerDelay(RX_01_TIMER) << " adc_clock/2 counts"  << std::endl; 
 //    std::cout << "rx 0/1 width:  " << _timerWidth(RX_01_TIMER) << " adc_clock/2 counts"   << std::endl;
 //    std::cout << "rx 2/3 delay:  " << _timerDelay(RX_23_TIMER) << " adc_clock/2 counts"  << std::endl; 
 //    std::cout << "rx 2/3 width:  " << _timerWidth(RX_23_TIMER) << " adc_clock/2 counts"   << std::endl;
-    std::cout << "tx delay:      " << _timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts"  << std::endl;
-    std::cout << "tx pulse width:" << _timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts"   << std::endl;
+    std::cout << "tx delay:      " << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts"  << std::endl;
+    std::cout << "tx pulse width:" << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts"   << std::endl;
 //    std::cout << "gate spacing:  " << gateSpacing()    << " m"                    << std::endl;
     std::cout << "prt:           " << _prtCounts       << " adc_clock/2 counts"   << std::endl;
     std::cout << "prt2:          " << _prt2Counts      << " adc_clock/2 counts"   << std::endl;
@@ -141,10 +140,10 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     // reset the FPGA clock managers. Necessary since some of our
     // new DCMs in the firmware use the CLKFX output, which won't
     // lock at startup.
-    _resetDCM();
+    resetDCM();
 
     // set free run mode as appropriate
-    _loadFreeRun();
+    loadFreeRun();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -152,25 +151,40 @@ p7142sd3c::~p7142sd3c() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142sd3cDn *
+p7142sd3cDn*
 p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
         double rx_delay, double rx_pulse_width, std::string gaussianFile, 
         std::string kaiserFile, double simPauseMs, int simWavelength,
         bool internalClock) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
+
     // Create a new p7142sd3cDn downconverter and put it in our list
-    p7142sd3cDn * downconverter = new p7142sd3cDn(this, chanId, burstSampling,
-            tsLength, rx_delay, rx_pulse_width, gaussianFile, kaiserFile, 
-            simPauseMs, simWavelength, internalClock);
-    _addDownconverter(downconverter);
+    p7142sd3cDn* downconverter = new p7142sd3cDn(
+    		this,
+			chanId,
+			burstSampling,
+			tsLength,
+			rx_delay,
+			rx_pulse_width,
+			gaussianFile,
+			kaiserFile,
+			simPauseMs,
+			simWavelength,
+			internalClock);
+
+    p7142::addDownconverter(downconverter);
+
     return(downconverter);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p7142sd3c::_setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool invert) {
+p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool invert) {
+
     _TimerConfig currentVals = _timerConfigs[ndx];
+
     boost::recursive_mutex::scoped_lock guard(_mutex);
+
     // If current timer width is non-zero, warn about any changes in 
     // width or delay.
     if (verbose && currentVals.width() != 0) {
@@ -185,6 +199,7 @@ p7142sd3c::_setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool in
                     delay << std::endl;
         }
     }
+
     _timerConfigs[ndx] = _TimerConfig(delay, width, invert);
 }
 
@@ -192,6 +207,7 @@ p7142sd3c::_setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool in
 int
 p7142sd3c::timeToCounts(double time) const {
     boost::recursive_mutex::scoped_lock guard(_mutex);
+
     return(lround(time * _adc_clock / 2));
 }
 
@@ -199,20 +215,8 @@ p7142sd3c::timeToCounts(double time) const {
 double
 p7142sd3c::countsToTime(int counts) const {
     boost::recursive_mutex::scoped_lock guard(_mutex);
+
     return((2 * counts) / _adc_clock);
-}
-
-//////////////////////////////////////////////////////////////////////
-unsigned int p7142sd3c::_readFpgaRepoRevision() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
-
-    if (_simulate)
-        return 1;
-    
-    _pp.offset = FPGA_REPO_REV;
-    ioctl(ctrlFd(), FIOREGGET, &_pp);
-    return _pp.value & 0x3fff;
-
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -224,25 +228,26 @@ void p7142sd3c::timersStartStop(bool start) {
         return;
     }
 
-        
     // Load timer values before starting the timers
     if (start) {
-        _initTimers();
+        initTimers();
     }
         
     // Turn on Write Strobes
-    _controlIoctl(FIOREGSET, MT_WR, WRITE_ON);
+    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
 
     // configure each timer
     for (int i = 0; i < 8; i++) {
 	    // Control Register
-        _controlIoctl(FIOREGSET, MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
+    	P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
 	
 	    // Enable/Disable Timer
-        unsigned int value = (start ? TIMER_ON : 0) | 
-                (_timerInvert(i) ? TIMER_NEG : 0);
-        _controlIoctl(FIOREGSET, MT_DATA, value);
+        unsigned int value =
+        		(start ? TIMER_ON : 0) | (timerInvert(i) ? TIMER_NEG : 0);
+
+        P7142_REG_WRITE(BAR2Base + MT_DATA, value);
     }
+
     // Get current time
     ptime now(microsec_clock::universal_time());
     //
@@ -268,21 +273,21 @@ void p7142sd3c::timersStartStop(bool start) {
             usleep(sleep_uSec);
             // Set the wait-for-trigger bit so timers start at the next
             // trigger.
-            _controlIoctl(FIOREGSET, MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
+            P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
         } else {
             // Internal trigger: timers start immediately.
             setXmitStartTime(now);
-            _controlIoctl(FIOREGSET, MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
+            P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
         }
         
         std::cout << "Timers/radar start time " << _xmitStartTime << std::endl;
     } else {
-        _controlIoctl(FIOREGSET, MT_ADDR, ALL_SD3C_TIMER_BITS);
+    	P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS);
         std::cout << "Timers stopped at " << now << std::endl;
     }
     
     // Turn off Write Strobes
-    _controlIoctl(FIOREGSET, MT_WR, WRITE_OFF);
+    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -293,9 +298,8 @@ void p7142sd3c::startFilters() {
         return;
 
     // Start the DDC
-    _pp.offset = KAISER_ADDR;
-    _pp.value = DDC_START;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_START);
+
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     std::cout << "filters enabled on " << _devName << std::endl;
@@ -308,10 +312,11 @@ void p7142sd3c::stopFilters() {
     if (isSimulating())
         return;
 
+    uint32_t temp;
     // stop the filters if they are running.
-    _controlIoctl(FIOREGGET, KAISER_ADDR);  
-    _controlIoctl(FIOREGSET, KAISER_ADDR, DDC_STOP);
-    _controlIoctl(FIOREGGET, KAISER_ADDR);
+    P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
+    P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_STOP);
+    P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -321,10 +326,10 @@ unsigned short int p7142sd3c::TTLIn() {
     if (_simulate)
         return 0;
 
-    _pp.offset = TTL_IN;
-    ioctl(ctrlFd(), FIOREGGET, &_pp);
+    uint32_t val;
+    P7142_REG_READ(BAR2Base + TTL_IN, val);
 
-    return _pp.value;
+    return val;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -334,92 +339,106 @@ void p7142sd3c::TTLOut(unsigned short int data) {
     if (_simulate)
         return;
 
-    _pp.value = data;
-
-    _pp.offset = TTL_OUT1;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + TTL_OUT1, data);
 
 }
 
 //////////////////////////////////////////////////////////////////////
-p7142sd3c::DDCDECIMATETYPE p7142sd3c::_readDDCType() {
+unsigned int p7142sd3c::sd3cTypeAndRev() {
+    boost::recursive_mutex::scoped_lock guard(_mutex);
+
+    if (_simulate)
+        return 1;
+
+    uint32_t retval;
+
+    P7142_REG_READ(BAR2Base + FPGA_REPO_REV, retval);
+
+    return retval;
+
+}
+
+//////////////////////////////////////////////////////////////////////
+int p7142sd3c::sd3cRev() {
+    boost::recursive_mutex::scoped_lock guard(_mutex);
+
+    if (_simulate)
+        return _simulateDDCType;
+
+    unsigned int ddcTypeAndRev = sd3cTypeAndRev();
+
+    // Up to rev 502, DDC type was a 1-bit value at bit 15.
+    // After that it's a 2-bit value in bits 14-15.
+    int retval = (ddcTypeAndRev & 0x3fff > 502) ?
+        (ddcTypeAndRev & 0x3fff) : (ddcTypeAndRev & 0x7fff);
+
+    return retval;
+}
+
+//////////////////////////////////////////////////////////////////////
+p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (_simulate)
         return _simulateDDCType;
     
-    _pp.offset = FPGA_REPO_REV;
-    ioctl(ctrlFd(), FIOREGGET, &_pp);
-    
+    unsigned int ddcTypeAndRev = sd3cTypeAndRev();
+
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
-    int ddcTypeFpgaVal = (_fpgaRepoRev > 502) ? 
-        (_pp.value & 0xC000) >> 14 : (_pp.value & 0x8000) >> 15;
+    int ddcType = (ddcTypeAndRev & 0x3fff > 502) ?
+        (ddcTypeAndRev & 0xC000) >> 14 : (ddcTypeAndRev & 0x8000) >> 15;
     
-    DDCDECIMATETYPE ddctype = DDC4DECIMATE;
-    switch (ddcTypeFpgaVal) {
+    DDCDECIMATETYPE retval = DDC4DECIMATE;
+    switch (ddcType) {
     case 0:
-        ddctype = DDC4DECIMATE;
+    	retval = DDC4DECIMATE;
         break;
     case 1:
-        ddctype = DDC8DECIMATE;
+    	retval = DDC8DECIMATE;
         break;
     case 2:
-        ddctype = DDC10DECIMATE;
+    	retval = DDC10DECIMATE;
         break;
     case 3:
-        ddctype = BURST;
+    	retval = BURST;
         break;     
     }
     
-    return ddctype;
-
+    return retval;
 }
 
 //////////////////////////////////////////////////////////////////////
 void
-p7142sd3c::_loadFreeRun() {
+p7142sd3c::loadFreeRun() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (isSimulating())
         return;
 
-    // set the free run bit as needed
+    // get the transceiver control register
+    uint32_t tcreg;
+    P7142_REG_READ(BAR2Base + TRANS_CNTRL, tcreg);
 
-    // get the current state of transceiver control register
-    _pp.offset = TRANS_CNTRL;
-    ioctl(ctrlFd(), FIOREGGET, &_pp);
-    usleep(P7142_IOCTLSLEEPUS);
-
+    // set the free run bit as specified by _freerun
     if (_freeRun) {
         // set free run
-        _pp.value = _pp.value | TRANS_FREE_RUN;
+    	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg | TRANS_FREE_RUN);
     } else {
         // clear free run
-        _pp.value = _pp.value & ~TRANS_FREE_RUN;
+    	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg & ~TRANS_FREE_RUN);
     }
 
-    // write transceiver control register
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
-    usleep(P7142_IOCTLSLEEPUS);
-
-    ioctl(ctrlFd(), FIOREGGET, &_pp);
-    usleep(P7142_IOCTLSLEEPUS);
-
-    //std::cout << "free run mode is " << (_freeRun ? "enabled" : "disabled") << 
-    //    " for " << devName() << std::endl;
-    //std::cout << "transceiver control register is " << _pp.value << std::endl;
 }
 
 /////////////////////////////////////////////////////////////////////////
 bool
-p7142sd3c::_initTimers() {
+p7142sd3c::initTimers() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (_simulate)
         return true;
 
-    //
     //    This section initializes the timers.
 
     int periodCount; // Period Count for all Timers
@@ -446,8 +465,8 @@ p7142sd3c::_initTimers() {
 
         PrtScheme = (Y << 4) | X;
     } else {
-        //single prt
-        //  PRT must be integral multiple of pulsewidth !
+        // Single prt
+    	// PRT must be integral multiple of pulsewidth !
         periodCount = _prtCounts;
         PrtScheme = 0x0000;
     }
@@ -455,68 +474,49 @@ p7142sd3c::_initTimers() {
     std::cout << "periodCount is " << periodCount << std::endl;
 
     // Control Register
-    _pp.offset = MT_ADDR;
-    _pp.value = CONTROL_REG | ALL_SD3C_TIMER_BITS;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
 
     // Enable Timer
-    _pp.offset = MT_DATA;
-    _pp.value = TIMER_ON;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + MT_DATA, TIMER_ON);
 
     // Turn on Write Strobes
-    _pp.offset = MT_WR;
-    _pp.value = WRITE_ON;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
     
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
         std::cout << "Initializing timer " << i << ": delay " <<
-            countsToTime(_timerDelay(i)) << "s (" << _timerDelay(i) <<
-            "), width " << countsToTime(_timerWidth(i)) << "s (" << 
-            _timerWidth(i) << ")" << (_timerInvert(i)? ", inverted":"") << std::endl;
+            countsToTime(timerDelay(i)) << "s (" << timerDelay(i) <<
+            "), width " << countsToTime(timerWidth(i)) << "s (" << 
+            timerWidth(i) << ")" << (timerInvert(i)? ", inverted":"") << std::endl;
         
         // Delay Register
-        _pp.offset = MT_ADDR; // Address
-        _pp.value = DELAY_REG | SD3C_TIMER_BITS[i];
-        ioctl(ctrlFd(), FIOREGSET, &_pp);
-
-        _pp.offset = MT_DATA; // Data
-        _pp.value = _timerDelay(i);
-        ioctl(ctrlFd(), FIOREGSET, &_pp);
+        // Address
+        P7142_REG_WRITE(BAR2Base + MT_ADDR, DELAY_REG | SD3C_TIMER_BITS[i]);
+        // Data
+        P7142_REG_WRITE(BAR2Base + MT_DATA, timerDelay(i));
 
         // Pulse Width Register
-        _pp.offset = MT_ADDR; // Address
-        _pp.value = WIDTH_REG | SD3C_TIMER_BITS[i];
-        ioctl(ctrlFd(), FIOREGSET, &_pp);
-
-        _pp.offset = MT_DATA; // Data
-        _pp.value = _timerWidth(i);
-        ioctl(ctrlFd(), FIOREGSET, &_pp);
+        // Address
+        P7142_REG_WRITE(BAR2Base + MT_ADDR, WIDTH_REG | SD3C_TIMER_BITS[i]);
+        // Data
+        P7142_REG_WRITE(BAR2Base + MT_DATA, timerWidth(i));
     }
 
-    // ALL TIMERS
-    // Period Register
-    _pp.offset = MT_ADDR; // Address
-    _pp.value = PERIOD_REG | ALL_SD3C_TIMER_BITS;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    // All timers have identical configuration for period and multiple prt
 
-    _pp.offset = MT_DATA; // Data
-    _pp.value = periodCount;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    // Period Register
+    // Address
+    P7142_REG_WRITE(BAR2Base + MT_ADDR, PERIOD_REG | ALL_SD3C_TIMER_BITS);
+    // Data
+    P7142_REG_WRITE(BAR2Base + MT_DATA, periodCount);
 
     //Multiple PRT Register
-    _pp.offset = MT_ADDR; // Address
-    _pp.value = PRT_REG | ALL_SD3C_TIMER_BITS;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
-
-    _pp.offset = MT_DATA; // Mult PRT Valu Timer 0
-    _pp.value = PrtScheme;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    // Address
+    P7142_REG_WRITE(BAR2Base + MT_ADDR, PRT_REG | ALL_SD3C_TIMER_BITS);
+    // Data: Mult PRT Valu Timer 0
+    P7142_REG_WRITE(BAR2Base + MT_DATA, PrtScheme);
 
     // Turn off Write Strobes
-    _pp.offset = MT_WR;
-    _pp.value = WRITE_OFF;
-    ioctl(ctrlFd(), FIOREGSET, &_pp);
+    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
 
     return true;
 

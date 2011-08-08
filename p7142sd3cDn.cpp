@@ -70,25 +70,24 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
             p7142sd3c::RX_01_TIMER : p7142sd3c::RX_23_TIMER;
     if (_isBurst) {
         _gates = rxPulsewidthCounts;
-        _sd3c._setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts);
+        _sd3c.setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts);
     } else {
-        _sd3c._setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts * _gates);
+        _sd3c.setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts * _gates);
     }
     
-    // Estimate the period between data-available interrupts based on the 
-    // configured interrupt buffer length. This is a good first-order estimate
-    // of maximum data latency time for the channel.
-    // TODO: Configure the channel intbufsize for roughly 10 Hz interrupts
-    // (and bufsize to ~2*intbufsize)
-    BUFFER_CFG bufConfig;
+    /// @todo Estimate the period between data-available interrupts based on the
+    /// configured interrupt buffer length. This is a good first-order estimate
+    /// of maximum data latency time for the channel.
+    /// TODO: Configure the channel intbufsize for roughly 10 Hz interrupts
+    /// (and bufsize to ~2*intbufsize)
+    
+    int intbufsize;
     if (isSimulating()) {
-        bufConfig.intbufsize = 32768;
-        bufConfig.bufsize = 524288;
+        intbufsize =  32768;
     } else {
-        ioctl(fd(), BUFGET, &bufConfig);
+        intbufsize = 10000; ///@todo This scheme needs to be revised once we get the windriver DMA working.
     }
-    
-    int interruptBytes = 4 * bufConfig.intbufsize;  // intbufsize is in 4-byte words
+    int interruptBytes = 4 * intbufsize;  // intbufsize is in 4-byte words
     double chanDataRate = (4 * _gates) / _sd3c.prt();   // @TODO this only works for single PRT
     _dataInterruptPeriod = interruptBytes / chanDataRate;
 
@@ -105,30 +104,30 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     }
     
     // initialize the buffering scheme.
-    initBuffer();
+    //initBuffer();
 
     if (isSimulating())
         return;
 
     /// Set the bypass divider (decimation) for our receiver channel
-    int bypassOk = _isBurst ? 
-            setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
-    if (!bypassOk) {
-        std::cerr << "Failed to set decimation for channel " << _chanId << 
-                std::endl;
-        abort();
-    }
-    std::cout << "bypass decim: " << bypassDivider() << std::endl;
+//    int bypassOk = _isBurst ?
+//            setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
+//    if (!bypassOk) {
+//        std::cerr << "Failed to set decimation for channel " << _chanId <<
+//                std::endl;
+//        abort();
+//    }
+//    std::cout << "bypass decim: " << bypassDivider() << std::endl;
     
     // flush the fifos. Note that a flush must not be issued
     // after the timers have been configured, as this will zero
     // the timer parameters.
-    flush();
+//    flush();
 
     // configure DDC in FPGA
-    if (!config()) {
-        std::cout << "error initializing filters\n";
-    }
+//    if (!config()) {
+//        std::cout << "error initializing filters\n";
+//    }
 
 }
 
@@ -151,19 +150,19 @@ double p7142sd3cDn::rcvrPulseWidth() const {
     // share RX_23_TIMER.
     p7142sd3c::TimerIndex rxTimerNdx = (_chanId <= 1) ? 
             p7142sd3c::RX_01_TIMER : p7142sd3c::RX_23_TIMER;
-    return(_sd3c.countsToTime(_sd3c._timerWidth(rxTimerNdx)));
+    return(_sd3c.countsToTime(_sd3c.timerWidth(rxTimerNdx)));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 double p7142sd3cDn::rcvrFirstGateDelay() const {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
-    int txDelayCounts = _sd3c._timerDelay(p7142sd3c::TX_PULSE_TIMER);
+    int txDelayCounts = _sd3c.timerDelay(p7142sd3c::TX_PULSE_TIMER);
     // Note that Channels 0 and 1 share RX_01_TIMER, and channels 2 and 3 
     // share RX_23_TIMER.
     p7142sd3c::TimerIndex rxTimerNdx = (_chanId <= 1) ? 
             p7142sd3c::RX_01_TIMER : p7142sd3c::RX_23_TIMER;
-    int rxDelayCounts = _sd3c._timerDelay(rxTimerNdx);
+    int rxDelayCounts = _sd3c.timerDelay(rxTimerNdx);
 
     return(_sd3c.countsToTime(rxDelayCounts - txDelayCounts));
 }
@@ -226,7 +225,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             break;    
         }
         
-        _sd3c._controlIoctl(FIOREGSET, KAISER_ADDR, 
+        P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_ADDR,
                 ddcSelect | DDC_STOP | ramSelect | ramAddr);
 
         // Try up to a few times to program this filter coefficient and
@@ -235,24 +234,27 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         for (int attempt = 0; attempt < 5; attempt++) {
             // write the value
             // LS word first
-            _sd3c._controlIoctl(FIOREGSET, KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
+            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
-            _sd3c._controlIoctl(FIOREGSET, KAISER_DATA_MSW, 
+            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_MSW,
                     (kaiser[i] >> 16) & 0x3);
     
             // latch coefficient
-            _sd3c._controlIoctl(FIOREGSET, KAISER_WR, 0x1);
+            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x1);
     
             // disable writing (kaiser readback only succeeds if we do this)
-            _sd3c._controlIoctl(FIOREGSET, KAISER_WR, 0x0);
+            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x0);
     
             // read back the programmed value; we need to do this in two words 
             // as above.
             unsigned int readBack;
-            readBack = _sd3c._controlIoctl(FIOREGGET, KAISER_READ_LSW) | 
-                   (_sd3c._controlIoctl(FIOREGGET, KAISER_READ_MSW) << 16);
+            uint32_t kaiser_lsw;
+            uint32_t kaiser_msw;
+            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_LSW, kaiser_lsw);
+            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_MSW, kaiser_msw);
+            readBack = kaiser_msw << 16 | kaiser_lsw;
 
             if (readBack == kaiser[i]) {
                 coeffLoaded = true;
@@ -322,30 +324,33 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         bool coeffLoaded = false;
         for (int attempt = 0; attempt < 5; attempt++) {
             // set the address
-            _sd3c._controlIoctl(FIOREGSET, GAUSSIAN_ADDR, 
+            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_ADDR,
                     ddcSelect | ramSelect | ramAddr);
     
             // write the value
             // LS word first
-            _sd3c._controlIoctl(FIOREGSET, GAUSSIAN_DATA_LSW, 
+            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_LSW,
                     gaussian[i] & 0xFFFF);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
-            _sd3c._controlIoctl(FIOREGSET, GAUSSIAN_DATA_MSW, 
+            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_MSW,
                     (gaussian[i] >> 16) & 0x3);
     
             // latch coefficient
-            _sd3c._controlIoctl(FIOREGSET, GAUSSIAN_WR, 0x1);
+            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x1);
     
             // disable writing (gaussian readback only succeeds if we do this)
-            _sd3c._controlIoctl(FIOREGSET, GAUSSIAN_WR, 0x0);
+            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x0);
     
             // read back the programmed value; we need to do this in two words 
             // as above.
             unsigned int readBack;
-            readBack = _sd3c._controlIoctl(FIOREGGET, GAUSSIAN_READ_LSW) |
-                    (_sd3c._controlIoctl(FIOREGGET, GAUSSIAN_READ_MSW) << 16);
+            uint32_t kaiser_lsw;
+            uint32_t kaiser_msw;
+            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_LSW, kaiser_lsw);
+            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_MSW, kaiser_msw);
+            readBack = kaiser_msw << 16 | kaiser_lsw;
             if (readBack == gaussian[i]) {
                 coeffLoaded = true;
                 if (attempt != 0) {
@@ -383,8 +388,8 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     return kaiserLoaded && gaussianLoaded;
 
 }
-////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////
 int p7142sd3cDn::filterSetup() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
@@ -414,7 +419,7 @@ int p7142sd3cDn::filterSetup() {
         // Choose the correct builtin Gaussian filter coefficient set.
         switch (_sd3c.ddcType()) {
         case p7142sd3c::DDC8DECIMATE: {
-            switch ((int)(_sd3c.countsToTime(_sd3c._timerWidth(p7142sd3c::TX_PULSE_TIMER)) * 1.0e7)) {
+            switch ((int)(_sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)) * 1.0e7)) {
 
             case 2:                             //pulse width = 0.256 microseconds
                 pulsewidthUs = 0.256;
@@ -446,7 +451,7 @@ int p7142sd3cDn::filterSetup() {
                 break;
             default:
                 std::cerr << "chip width specification of "
-                          << _sd3c._timerWidth(p7142sd3c::TX_PULSE_TIMER)
+                          << _sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)
                           << " is not recognized, filter will be configured for a "
                           << pulsewidthUs << " uS pulse\n";
                 break;
@@ -614,10 +619,10 @@ void p7142sd3cDn::fifoConfig() {
         break;
     }
 
-    readBack = _sd3c._controlIoctl(FIOREGGET, ppOffset);
+    P7142_REG_READ(_sd3c.BAR2Base + ppOffset, readBack);
 
     // And configure ADC FIFO Control for this channel
-    _sd3c._controlIoctl(FIOREGSET, ppOffset, readBack & 0x000034BF);
+    P7142_REG_WRITE(_sd3c.BAR2Base + ppOffset, readBack & 0x000034BF);
 
 }
 

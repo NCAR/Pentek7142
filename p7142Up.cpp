@@ -32,6 +32,8 @@ p7142Up::p7142Up(p7142 * p7142ptr,
     if (isSimulating())
         return;
 
+    // Note that most of the DAC related initialization was
+    // performed in p71xx().
 
     // Initialize the DAC configuration registers
     initDAC();

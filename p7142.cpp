@@ -54,33 +54,41 @@ p7142::~p7142() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-p7142Dn *
+p7142Dn*
 p7142::addDownconverter(int chanId, int bypassdivrate,
         int simWavelength, bool sim4bytes) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
     // Just construct a new downconverter and put it in our list.
-    p7142Dn * downconverter = new p7142Dn(this, chanId, bypassdivrate, 
-            simWavelength, sim4bytes);
-    _addDownconverter(downconverter);
+    p7142Dn* downconverter = new p7142Dn(
+    		this,
+    		chanId,
+    		bypassdivrate,
+            simWavelength,
+            sim4bytes);
+    addDownconverter(downconverter);
     return(downconverter);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-p7142Up *
+p7142Up*
 p7142::addUpconverter(
 		double sampleClockHz,
         double ncoFreqHz,
         char mode) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
     // Just construct a new upconverter and put it in our list.
-    p7142Up * upconverter = new p7142Up(this, sampleClockHz, ncoFreqHz, mode);
+    p7142Up* upconverter = new p7142Up(
+    		this,
+    		sampleClockHz,
+    		ncoFreqHz,
+    		mode);
     _addUpconverter(upconverter);
     return(upconverter);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 void
-p7142::_addDownconverter(p7142Dn * downconverter) {
+p7142::addDownconverter(p7142Dn * downconverter) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
     
     int chanId = downconverter->chanId();
@@ -105,27 +113,9 @@ p7142::_addUpconverter(p7142Up * upconverter) {
     _upconverter = upconverter;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-unsigned int
-p7142::_controlIoctl(unsigned int request, unsigned int offset, 
-    unsigned int value) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
-
-    ARG_PEEKPOKE pp;
-    pp.page = 2; // PCIBAR 2
-    pp.mask = 0;
-    pp.offset = offset;
-    pp.value = value;
-
-    ioctl(ctrlFd(), request, &pp);
-    usleep(p7142::P7142_IOCTLSLEEPUS);
-
-    return pp.value;
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p7142::_resetDCM() {
+p7142::resetDCM() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (isSimulating())

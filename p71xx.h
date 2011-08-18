@@ -101,7 +101,9 @@ namespace Pentek {
             void configOutParameters();
             /// Configure the DAC parameters, in p7142Dac5686Params
             void configDacParameters();
+            /// start DMA for the specified DMA channel
             void start(int chan);
+            /// stop the DMA for the specified DMA channel.
             void stop(int chan);
 
             void* hDev;

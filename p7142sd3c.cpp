@@ -39,8 +39,23 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
         _externalStartTrigger(externalStartTrigger) {
 	boost::recursive_mutex::scoped_lock guard(_mutex);
 
+    // sanity check
+    if (_nsum < 1) {
+        std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<
+                std::endl;
+        abort();
+    }
+
+    // Get the firmware revison and ddc type from the FPGA.
+	if (simulate) {
+		_sd3cRev = 1;
+		_ddcType = simulateDDCType;
+	} else {
+		_sd3cRev = sd3cRev();
+		_ddcType = ddcType();
+	}
+
     // Set the ADC clock rate based on DDC type
-    std::cout << _devName << " DDC type: " << ddcTypeName() << std::endl;
     switch (_ddcType) {
     case DDC10DECIMATE:
         _adc_clock = 100.0e6;
@@ -55,17 +70,6 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
         _adc_clock = 100.0e6;
         break;
     }
-
-    // sanity check
-    if (_nsum < 1) {
-        std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<
-                std::endl;
-        abort();
-    }
-
-    // Get the firmware revison and ddc type from the FPGA.
-    _sd3cRev = sd3cRev();
-    _ddcType = ddcType();
 
     // Announce the FPGA firmware revision
     std::cout << _devName << " SD3C revision: " << std::dec << _sd3cRev << std::endl;
@@ -89,9 +93,10 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
 
     	P7142_REG_WRITE(BAR2Base + RADAR_GATES, gates);
     	P7142_REG_READ (BAR2Base + RADAR_GATES, temp);
-
+    	std::cout << "gate readback is " << temp <<std::endl;
     	P7142_REG_WRITE(BAR2Base + CI_NSUM, nsum);
     	P7142_REG_READ (BAR2Base + CI_NSUM, temp);
+    	std::cout << "nsum readback is " << temp << std::endl;
     }
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
@@ -112,30 +117,29 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts);
     
     std::cout << "downconverter: " << ddcTypeName(_ddcType) << std::endl;
-//    std::cout << "rx 0/1 delay:  " << _timerDelay(RX_01_TIMER) << " adc_clock/2 counts"  << std::endl; 
-//    std::cout << "rx 0/1 width:  " << _timerWidth(RX_01_TIMER) << " adc_clock/2 counts"   << std::endl;
-//    std::cout << "rx 2/3 delay:  " << _timerDelay(RX_23_TIMER) << " adc_clock/2 counts"  << std::endl; 
-//    std::cout << "rx 2/3 width:  " << _timerWidth(RX_23_TIMER) << " adc_clock/2 counts"   << std::endl;
     std::cout << "tx delay:      " << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts"  << std::endl;
     std::cout << "tx pulse width:" << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts"   << std::endl;
-//    std::cout << "gate spacing:  " << gateSpacing()    << " m"                    << std::endl;
     std::cout << "prt:           " << _prtCounts       << " adc_clock/2 counts"   << std::endl;
     std::cout << "prt2:          " << _prt2Counts      << " adc_clock/2 counts"   << std::endl;
     std::cout << "staggered:     " << ((_staggeredPrt) ? "true" : "false")        << std::endl;
-//    std::cout << "rng to gate0:  " << rangeToFirstGate() << " m"                  << std::endl;
-//    std::cout << "clock source:  " << (usingInternalClock() ? "internal" : "external") << std::endl;
-//    std::cout << "ts length:     " << _tsLength                                   << std::endl;
     std::cout << "gates:         " << _gates                                      << std::endl;
     std::cout << "nsum:          " << _nsum                                       << std::endl;
     std::cout << "free run:      " << ((_freeRun) ? "true" : "false")             << std::endl;
     std::cout << "adc clock:     " << _adc_clock       << " Hz"                   << std::endl;
     std::cout << "prf:           " << _prf             << " Hz"                   << std::endl;
     std::cout << "data rate:     " << dataRate()/1.0e3 << " KB/s"                 << std::endl;
-//    std::cout << "sim usleep     " << _simPauseMS*1000 << "us"                    <<std::endl;
-//    for (int i = 0; i < 8; i++) {
-//        std::cout << "timer " << i << " delay: " << _timerDelay(i) << " adc_clock/2 counts"  << std::endl;
-//        std::cout << "timer " << i << " width: " << _timerWidth(i) << " adc_clock/2 counts"  << std::endl;
-//    }
+
+    //    std::cout << "rx 0/1 delay:  " << _timerDelay(RX_01_TIMER) << " adc_clock/2 counts"  << std::endl;
+    //    std::cout << "rx 0/1 width:  " << _timerWidth(RX_01_TIMER) << " adc_clock/2 counts"   << std::endl;
+    //    std::cout << "rx 2/3 delay:  " << _timerDelay(RX_23_TIMER) << " adc_clock/2 counts"  << std::endl;
+    //    std::cout << "rx 2/3 width:  " << _timerWidth(RX_23_TIMER) << " adc_clock/2 counts"   << std::endl;
+    //    std::cout << "clock source:  " << (usingInternalClock() ? "internal" : "external") << std::endl;
+    //    std::cout << "ts length:     " << _tsLength                                   << std::endl;
+    //    std::cout << "sim usleep     " << _simPauseMS*1000 << "us"                    <<std::endl;
+	//    for (int i = 0; i < 8; i++) {
+	//        std::cout << "timer " << i << " delay: " << _timerDelay(i) << " adc_clock/2 counts"  << std::endl;
+	//        std::cout << "timer " << i << " width: " << _timerWidth(i) << " adc_clock/2 counts"  << std::endl;
+	//    }
     
     // reset the FPGA clock managers. Necessary since some of our
     // new DCMs in the firmware use the CLKFX output, which won't
@@ -650,6 +654,69 @@ std::string p7142sd3c::ddcTypeName(DDCDECIMATETYPE type) {
 std::string p7142sd3c::ddcTypeName() const
 {
 	return ddcTypeName(_ddcType);
+}
+
+//////////////////////////////////////////////////////////////////////
+double p7142sd3c::txPulseWidth() const
+{
+	return countsToTime(txPulseWidthCounts());
+}
+
+//////////////////////////////////////////////////////////////////////
+int p7142sd3c::txPulseWidthCounts() const
+{
+	return timerWidth(TX_PULSE_TIMER);
+}
+
+//////////////////////////////////////////////////////////////////////
+void p7142sd3c::setGPTimer0(double delay, double width, bool invert)
+{
+    setTimer(GP_TIMER_0, timeToCounts(delay), timeToCounts(width), true, invert);
+}
+
+//////////////////////////////////////////////////////////////////////
+void p7142sd3c::setGPTimer1(double delay, double width, bool invert)
+{
+    setTimer(GP_TIMER_1, timeToCounts(delay), timeToCounts(width), true, invert);
+}
+
+//////////////////////////////////////////////////////////////////////
+void p7142sd3c::setGPTimer2(double delay, double width, bool invert)
+{
+    setTimer(GP_TIMER_2, timeToCounts(delay), timeToCounts(width), true, invert);
+}
+
+//////////////////////////////////////////////////////////////////////
+void p7142sd3c::setGPTimer3(double delay, double width, bool invert)
+{
+    setTimer(GP_TIMER_3, timeToCounts(delay), timeToCounts(width), true, invert);
+}
+
+//////////////////////////////////////////////////////////////////////
+unsigned int p7142sd3c::gates() const
+{
+	return _gates;
+}
+
+//////////////////////////////////////////////////////////////////////
+unsigned int p7142sd3c::nsum() const
+{
+	return _nsum;
+}
+
+//////////////////////////////////////////////////////////////////////
+int p7142sd3c::timerDelay(int timerNdx) const {
+    return(_timerConfigs[timerNdx].delay());
+}
+
+//////////////////////////////////////////////////////////////////////
+int p7142sd3c::timerWidth(int timerNdx) const {
+    return(_timerConfigs[timerNdx].width());
+}
+
+//////////////////////////////////////////////////////////////////////
+bool p7142sd3c::timerInvert(int timerNdx) const {
+    return(_timerConfigs[timerNdx].invert());
 }
 
 } // end namespace Pentek

@@ -99,21 +99,21 @@ p7142Dn::~p7142Dn() {
 ////////////////////////////////////////////////////////////////////////////////
 std::string
 p7142Dn::dnName() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     return _dnName;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 bool
 p7142Dn::isSimulating() const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     return _p7142.isSimulating();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 int
 p7142Dn::overUnderCount() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
 
     // if simulate, indicate no errors.
     if (isSimulating()) {
@@ -158,6 +158,8 @@ p7142Dn::read(char* buf, int bufsize) {
     }
 
     if (!isSimulating()) {
+    	return bufsize;
+
         // not in simulation mode; do a proper read from the device
         int n = ::read(_dnFd, buf, bufsize);
 
@@ -215,7 +217,7 @@ p7142Dn::read(char* buf, int bufsize) {
 ////////////////////////////////////////////////////////////////////////////////
 long
 p7142Dn::bytesRead() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     long retval = _bytesRead;
     _bytesRead = 0;
     return retval;
@@ -268,7 +270,7 @@ p7142Dn::usingInternalClock() const {
 ////////////////////////////////////////////////////////////////////////////////
 int
 p7142Dn::bypassDivider() const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (isSimulating())
         return(0);

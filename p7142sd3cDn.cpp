@@ -1172,7 +1172,7 @@ p7142sd3cDn::unpackPtChannelAndPulse(const char* buf, unsigned int & chan,
 //////////////////////////////////////////////////////////////////////////////////
 unsigned long
 p7142sd3cDn::droppedPulses() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     unsigned long retval = _droppedPulses;
     return retval;
 }
@@ -1180,7 +1180,7 @@ p7142sd3cDn::droppedPulses() {
 //////////////////////////////////////////////////////////////////////////////////
 unsigned long
 p7142sd3cDn::syncErrors() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     unsigned long retval = _syncErrors;
     return retval;
 }
@@ -1188,7 +1188,7 @@ p7142sd3cDn::syncErrors() {
 //////////////////////////////////////////////////////////////////////////////////
 void
 p7142sd3cDn::dumpSimFifo(std::string label, int n) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
     std::cout << label <<  " _simFifo length: " << _simFifo.size() << std::endl;
     std::cout << std::hex;
     for (unsigned int i = 0; i < (unsigned int)n && i < _simFifo.size(); i++) {
@@ -1198,6 +1198,11 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
         }
     }
     std::cout << std::dec << std::endl;;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+void p7142sd3cDn::stop() {
+	_sd3c.stop(_chanId);
 }
 
 } // end namespace Pentek

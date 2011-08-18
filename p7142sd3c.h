@@ -22,6 +22,8 @@
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+static const double SPEED_OF_LIGHT = 2.99792458e8;  // m s-1
+
 namespace Pentek {
 
 /// A p7142 class specialized for cards running the SD3C firmware.
@@ -114,6 +116,10 @@ public:
             int simWaveLength = 5000,
             bool internalClock = false);
     
+    /// Stop the DMA for a specified downconverter
+    /// @param chan The desired channel
+    void stopDMA(int chan);
+
     /// @return The ADC clock frequency in Hz.
     double adcFrequency() const {
         return _adc_clock;
@@ -197,63 +203,55 @@ public:
     
     /// The transmit pulse width, in seconds
     /// @return the transmit pulse width, in seconds
-    double txPulseWidth() const { return countsToTime(txPulseWidthCounts()); }
+    double txPulseWidth() const;
     
     /// Return the transmit pulse width, in local counts, which are units of 
     /// (2 / adc_freq) seconds.
-    int txPulseWidthCounts() const { return timerWidth(TX_PULSE_TIMER); }
+    int txPulseWidthCounts() const;
     
     /// Set up general purpose timer 0. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
-    void setGPTimer0(double delay, double width, bool invert = false) {
-        setTimer(GP_TIMER_0, timeToCounts(delay), timeToCounts(width), true, invert);
-    }
+    void setGPTimer0(double delay, double width, bool invert = false);
     
     /// Set up general purpose timer 1. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
-    void setGPTimer1(double delay, double width, bool invert = false) {
-        setTimer(GP_TIMER_1, timeToCounts(delay), timeToCounts(width), true, invert);
-    }
+    void setGPTimer1(double delay, double width, bool invert = false);
     
     /// Set up general purpose timer 2. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
-    void setGPTimer2(double delay, double width, bool invert = false) {
-        setTimer(GP_TIMER_2, timeToCounts(delay), timeToCounts(width), true, invert);
-    }
+    void setGPTimer2(double delay, double width, bool invert = false);
     
     /// Set up general purpose timer 3. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
-    void setGPTimer3(double delay, double width, bool invert = false) {
-        setTimer(GP_TIMER_3, timeToCounts(delay), timeToCounts(width), true, invert);
-    }
+    void setGPTimer3(double delay, double width, bool invert = false);
     
     /// Return the number of gates being sampled by our non-burst downconverters.
     /// @return the number of gates being sampled by our non-burst 
     ///     downconverters
-    unsigned int gates() const { return _gates; }
+    unsigned int gates() const;
     
     /// Return the number of pulses to sum for coherent integration, used by
     /// all of our non-burst downconverters. It represents the number of
     /// beams which go into an even beam accumulation, and likewise the
     /// number of beams which go into an odd beam accumulation.
     /// If nsum == 1, coherent integration is disabled.
-    unsigned int nsum() const { return _nsum; }
+    unsigned int nsum() const;
     
     /// @return The expected data bandwidth from a (non-burst) receiver channel 
     /// in bytes per second
     int dataRate();
-    
+
     /// @return Time of the given transmit pulse.
     boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart) const;
     
@@ -316,9 +314,7 @@ protected:
      *     interest
      * @return the timer delay in counts
      */
-    int timerDelay(int timerNdx) const {
-        return(_timerConfigs[timerNdx].delay());
-    }
+    int timerDelay(int timerNdx) const;
     
     /**
      * Return timer width in counts for the selected timer. While
@@ -328,9 +324,7 @@ protected:
      *     interest
      * @return the timer width in counts
      */
-    int timerWidth(int timerNdx) const {
-        return(_timerConfigs[timerNdx].width());
-    }
+    int timerWidth(int timerNdx) const;
     
     /**
      * Return timer invert flag for the selected timer. While
@@ -340,9 +334,7 @@ protected:
      *     interest
      * @return true if the timer is inverted
      */
-    bool timerInvert(int timerNdx) const {
-        return(_timerConfigs[timerNdx].invert());
-    }
+    bool timerInvert(int timerNdx) const;
     
     /// Set delay and width values for the selected timer. Note that values
     /// set here are not actually loaded onto the card until the timers are

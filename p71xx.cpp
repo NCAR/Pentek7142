@@ -32,13 +32,24 @@ extern "C" void dmaIntHandler(
 		PVOID pData,
         PTK714X_INT_RESULT *pIntResult);
 
+int dmaCount[4] = {0,0,0,0};
+long dmaTotal = 0;
+
 void dmaIntHandler(
 		PVOID hDev,
 		unsigned int dmaChannel,
 		PVOID pData,
         PTK714X_INT_RESULT *pIntResult)
 {
-	printf(" %d", dmaChannel);
+	dmaTotal++;
+	dmaCount[dmaChannel]++;
+	if (!(dmaTotal % 100)) {
+		for (int i = 0; i < 4; i++) {
+			printf("%d ", dmaCount[i]);
+		}
+		printf("\n");
+	}
+
     sem_post(&dmaSemKey);
 }
 
@@ -442,9 +453,6 @@ p71xx::start() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p71xx::stop() {
-	for (int adchan = 0; adchan < 4; adchan++) {
-		stop(adchan);
-	}
 
     /* disable FIFO writes (set Gate in reset) */
 	///@todo Temoprarily using the GateFlow gating signal to
@@ -499,6 +507,8 @@ p71xx::stop(int chan) {
 	}
 
 	_adcActive[chan] = false;
+
+	std::cout << "DMA terminated for ADC channel " << chan << std::endl;
 
 }
 

@@ -139,6 +139,9 @@ public:
     /// Destructor
     virtual ~p7142sd3cDn();
 
+    /// Stop data transfers
+    void stop();
+
     /// Read bytes. If in simulated mode, a sine wave with wavelength
     /// of _simWaveLength gates will be synthesized. It will have some 
     /// random noise applied as well.
@@ -156,14 +159,10 @@ public:
     static const double SPEED_OF_LIGHT = 2.99792458e8;  // m s-1
     
     /// @return The gate spacing, in m
-    double gateSpacing() const {
-        return(0.5 * SPEED_OF_LIGHT * rcvrPulseWidth());
-    }
+    double gateSpacing() const;
     
     /// @return The range to the leading edge of the first gate, in m
-    double rangeToFirstGate() const {
-        return(0.5 * SPEED_OF_LIGHT * rcvrFirstGateDelay());
-    }
+    double rangeToFirstGate() const;
     
     /// @returns The length in bytes of IQ data in each beam that the
     /// is returned by getBeam(). The user of p7142sd3cDn should

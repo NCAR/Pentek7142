@@ -104,7 +104,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     }
     
     // initialize the buffering scheme.
-    //initBuffer();
+    initBuffer();
 
     if (isSimulating())
         return;

@@ -43,7 +43,7 @@ void dmaIntHandler(
 {
 	dmaTotal++;
 	dmaCount[dmaChannel]++;
-	if (!(dmaTotal % 500)) {
+	if (!(dmaTotal % 100)) {
 		for (int i = 0; i < 4; i++) {
 			printf("%d ", dmaCount[i]);
 		}
@@ -165,28 +165,28 @@ void p71xx::configBoardParameters() {
     p7142BoardParams.busAMaster      = P7142_MSTR_CTRL_MASTER;
     p7142BoardParams.busATermination = P7142_MSTR_CTRL_TERMINATED;
 
-    p7142BoardParams.busASelectClock = P7142_MSTR_CTRL_SEL_CLK_OSCILLATOR;
-    p7142BoardParams.busAClockSource = P7142_MSTR_CTRL_CLK_SRC_LVDS_BUS;
+    p7142BoardParams.busASelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    p7142BoardParams.busAClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
 
     p7142BoardParams.busASelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
-    p7142BoardParams.busASyncSource  = P7142_MSTR_CTRL_SYNC_SRC_LVDS_BUS;
+    p7142BoardParams.busASyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
 
     p7142BoardParams.busASelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
-    p7142BoardParams.busAGateSource  = P7142_MSTR_CTRL_GATE_SRC_LVDS_BUS;
+    p7142BoardParams.busAGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
 
     /* Bus B parameters */
 
     p7142BoardParams.busBMaster      = P7142_MSTR_CTRL_MASTER;
     p7142BoardParams.busBTermination = P7142_MSTR_CTRL_TERMINATED;
 
-    p7142BoardParams.busBSelectClock = P7142_MSTR_CTRL_SEL_CLK_OSCILLATOR;
-    p7142BoardParams.busBClockSource = P7142_MSTR_CTRL_CLK_SRC_LVDS_BUS;
+    p7142BoardParams.busBSelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    p7142BoardParams.busBClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
 
     p7142BoardParams.busBSelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
-    p7142BoardParams.busBSyncSource  = P7142_MSTR_CTRL_SYNC_SRC_LVDS_BUS;
+    p7142BoardParams.busBSyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
 
     p7142BoardParams.busBSelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
-    p7142BoardParams.busBGateSource  = P7142_MSTR_CTRL_GATE_SRC_LVDS_BUS;
+    p7142BoardParams.busBGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
 
     p7142BoardParams.endianness = P7142_MISC_CTRL_ENDIANNESS_LE;
 
@@ -274,12 +274,6 @@ void p71xx::configDmaParameters() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void p71xx::configInParameters() {
 
-    /* data input parameters - the program uses Sync Bus A for clock, sync
-     * and gate signals.  This is the ReadyFlow default but is provided for
-     * user experimentation.  Besides that, only parameters for the FIFO
-     * for the active channel is set in this example.
-     */
-
     /* Sync Bus select */
     p7142InParams.inputSyncBusSel = P7142_SYNC_BUS_SEL_A;
 
@@ -292,12 +286,13 @@ void p71xx::configInParameters() {
         gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateAGen);
     else
         gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateBGen);
+
     /* disable FIFO writes (set Gate in reset) */
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
 
     /* set FIFO parameters */
 
-    for (int adchan = 0; adchan < 1; adchan++) {
+    for (int adchan = 0; adchan < 4; adchan++) {
     	/* select data packing mode.  It can be unpacked or time-packed.
 		 * The program define is located at the top of the program.
 		 */
@@ -307,7 +302,9 @@ void p71xx::configInParameters() {
 		 * FIFO to be reduced.  It can be a value from 0 to 0xFFF.  Actual
 		 * decimation is this value plus one.
 		 */
-		p7142InParams.adcFifoDecimation[adchan] = 7;
+		// set to decimation by 1 here, but will almost always be modified by the user
+		// to an appropriate value.
+		p7142InParams.adcFifoDecimation[adchan] = 0;
 
 		/* The FIFO Almost Full and Almost Empty levels are set to default
 		 * values for all programs.  The values shown here are the default
@@ -447,7 +444,10 @@ p71xx::start() {
 	///@todo Temporarily using the GateFlow gating signal to
 	/// enable/disable data flow. This will be changed to
 	/// using the timers for this purpose.
+	/// @todo It doesn't seem to make any difference whether the gate is on
+	/// or off. Need to track this down.
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_ENABLE);
+	std::cout << "GateGen enabled" << std::endl;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -458,7 +458,10 @@ p71xx::stop() {
 	///@todo Temoprarily using the GateFlow gating signal to
 	/// enable/disable data flow. This will be changed to
 	/// using the timers for this purpose.
+	/// @todo It doesn't seem to make any difference whether the gate is on
+	/// or off. Need to track this down.
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
+	std::cout << "GateGen disabled" << std::endl;
 
 }
 

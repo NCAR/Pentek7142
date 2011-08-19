@@ -92,9 +92,11 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     	uint32_t temp;
 
     	P7142_REG_WRITE(BAR2Base + RADAR_GATES, gates);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (BAR2Base + RADAR_GATES, temp);
     	std::cout << "gate readback is " << temp <<std::endl;
     	P7142_REG_WRITE(BAR2Base + CI_NSUM, nsum);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (BAR2Base + CI_NSUM, temp);
     	std::cout << "nsum readback is " << temp << std::endl;
     }
@@ -239,17 +241,19 @@ void p7142sd3c::timersStartStop(bool start) {
         
     // Turn on Write Strobes
     P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // configure each timer
     for (int i = 0; i < 8; i++) {
 	    // Control Register
     	P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
 	
 	    // Enable/Disable Timer
         unsigned int value =
         		(start ? TIMER_ON : 0) | (timerInvert(i) ? TIMER_NEG : 0);
-
         P7142_REG_WRITE(BAR2Base + MT_DATA, value);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
     // Get current time
@@ -278,20 +282,24 @@ void p7142sd3c::timersStartStop(bool start) {
             // Set the wait-for-trigger bit so timers start at the next
             // trigger.
             P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
+            usleep(p7142::P7142_IOCTLSLEEPUS);
         } else {
             // Internal trigger: timers start immediately.
             setXmitStartTime(now);
             P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
+            usleep(p7142::P7142_IOCTLSLEEPUS);
         }
         
         std::cout << "Timers/radar start time " << _xmitStartTime << std::endl;
     } else {
     	P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
         std::cout << "Timers stopped at " << now << std::endl;
     }
     
     // Turn off Write Strobes
     P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -303,10 +311,9 @@ void p7142sd3c::startFilters() {
 
     // Start the DDC
     P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_START);
-
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
-    std::cout << "filters enabled on " << _devName << std::endl;
+    std::cout << "filters enabled" << std::endl;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -320,6 +327,7 @@ void p7142sd3c::stopFilters() {
     // stop the filters if they are running.
     P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
     P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_STOP);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
     P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
 }
 
@@ -387,7 +395,6 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
         return _simulateDDCType;
     
     unsigned int ddcTypeAndRev = sd3cTypeAndRev();
-    std::cout << "std type and rev " << std::hex << ddcTypeAndRev << std::dec << std::endl;
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
@@ -429,9 +436,11 @@ p7142sd3c::loadFreeRun() {
     if (_freeRun) {
         // set free run
     	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg | TRANS_FREE_RUN);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     } else {
         // clear free run
     	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg & ~TRANS_FREE_RUN);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
 }
@@ -480,12 +489,15 @@ p7142sd3c::initTimers() {
 
     // Control Register
     P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Enable Timer
     P7142_REG_WRITE(BAR2Base + MT_DATA, TIMER_ON);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Turn on Write Strobes
     P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
     
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
         std::cout << "Initializing timer " << i << ": delay " <<
@@ -496,14 +508,18 @@ p7142sd3c::initTimers() {
         // Delay Register
         // Address
         P7142_REG_WRITE(BAR2Base + MT_ADDR, DELAY_REG | SD3C_TIMER_BITS[i]);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
         // Data
         P7142_REG_WRITE(BAR2Base + MT_DATA, timerDelay(i));
+        usleep(p7142::P7142_IOCTLSLEEPUS);
 
         // Pulse Width Register
         // Address
         P7142_REG_WRITE(BAR2Base + MT_ADDR, WIDTH_REG | SD3C_TIMER_BITS[i]);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
         // Data
         P7142_REG_WRITE(BAR2Base + MT_DATA, timerWidth(i));
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
     // All timers have identical configuration for period and multiple prt
@@ -511,17 +527,22 @@ p7142sd3c::initTimers() {
     // Period Register
     // Address
     P7142_REG_WRITE(BAR2Base + MT_ADDR, PERIOD_REG | ALL_SD3C_TIMER_BITS);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
     // Data
     P7142_REG_WRITE(BAR2Base + MT_DATA, periodCount);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     //Multiple PRT Register
     // Address
     P7142_REG_WRITE(BAR2Base + MT_ADDR, PRT_REG | ALL_SD3C_TIMER_BITS);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
     // Data: Mult PRT Valu Timer 0
     P7142_REG_WRITE(BAR2Base + MT_DATA, PrtScheme);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Turn off Write Strobes
     P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
 
     return true;
 

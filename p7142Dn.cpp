@@ -120,6 +120,8 @@ p7142Dn::overUnderCount() {
         return 0;
     }
 
+    return 0;
+
     int count = ioctl(_dnFd, FIOGETOVRCNT);
     if (count == -1) {
         std::cout << "unable to get ovr/under for "
@@ -275,8 +277,7 @@ p7142Dn::bypassDivider() const {
     if (isSimulating())
         return(0);
     
-    // get the bypass divider
-    return *_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide;
+    return (*_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide) + 1;
 
     //int bypassdiv;
     //if ((bypassdiv = ioctl(_dnFd, FIOBYPDIVGET, 0)) == -1) {
@@ -294,6 +295,15 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
     if (isSimulating())
         return true;
     
+    *_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide = (bypassdiv-1);
+
+    if (*_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide != (bypassdiv-1)) {
+    	return false;
+    }
+
+    return true;
+
+
     // set the bypass divider
     if (ioctl(_dnFd, FIOBYPDIVSET, bypassdiv) == -1) {
       std::cerr << "unable to set the bypass divider for "

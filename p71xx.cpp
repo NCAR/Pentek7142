@@ -43,7 +43,7 @@ void dmaIntHandler(
 {
 	dmaTotal++;
 	dmaCount[dmaChannel]++;
-	if (!(dmaTotal % 100)) {
+	if (!(dmaTotal % 500)) {
 		for (int i = 0; i < 4; i++) {
 			printf("%d ", dmaCount[i]);
 		}

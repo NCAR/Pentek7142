@@ -110,14 +110,14 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         return;
 
     /// Set the bypass divider (decimation) for our receiver channel
-//    int bypassOk = _isBurst ?
-//            setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
-//    if (!bypassOk) {
-//        std::cerr << "Failed to set decimation for channel " << _chanId <<
-//                std::endl;
-//        abort();
-//    }
-//    std::cout << "bypass decim: " << bypassDivider() << std::endl;
+    int bypassOk = _isBurst ?
+            setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
+    if (!bypassOk) {
+        std::cerr << "Failed to set decimation for channel " << _chanId <<
+                std::endl;
+        abort();
+    }
+    std::cout << "bypass decim: " << bypassDivider() << std::endl;
     
     // flush the fifos. Note that a flush must not be issued
     // after the timers have been configured, as this will zero
@@ -125,9 +125,9 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
 //    flush();
 
     // configure DDC in FPGA
-//    if (!config()) {
-//        std::cout << "error initializing filters\n";
-//    }
+    if (!config()) {
+        std::cout << "error initializing filters\n";
+    }
 
 }
 
@@ -174,6 +174,7 @@ bool p7142sd3cDn::config() {
     fifoConfig();
 
     // Stop the filters from running
+    /// @todo a global stop of the filters doesn't really belong here.
     _sd3c.stopFilters();
 
     // Is coherent integration enabled?
@@ -201,7 +202,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
 
     // program kaiser coefficients
 
-    bool kaiserLoaded = true;
+    bool kaiserFailed = false;
     
     for (unsigned int i = 0; i < kaiser.size(); i++) {
 
@@ -227,6 +228,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         
         P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_ADDR,
                 ddcSelect | DDC_STOP | ramSelect | ramAddr);
+        usleep(1);
 
         // Try up to a few times to program this filter coefficient and
         // read it back successfully.
@@ -235,17 +237,21 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             // write the value
             // LS word first
             P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
+            usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
             P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_MSW,
                     (kaiser[i] >> 16) & 0x3);
+            usleep(1);
     
             // latch coefficient
             P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x1);
+            usleep(1);
     
             // disable writing (kaiser readback only succeeds if we do this)
             P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x0);
+            usleep(1);
     
             // read back the programmed value; we need to do this in two words 
             // as above.
@@ -277,10 +283,10 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             std::cout << " -- FAILED!" << std::endl;
         }
         
-        kaiserLoaded |= coeffLoaded;
+        kaiserFailed |= !coeffLoaded;
     }
 
-    if (kaiserLoaded) {
+    if (!kaiserFailed) {
         std::cout << kaiser.size()
                 << " Kaiser filter coefficients successfully loaded" << std::endl;
     } else {
@@ -291,7 +297,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // Note that the DDC select is accomplished in the kaiser filter coefficient
     // address register, which was done during the previous kaiser filter load.
 
-    bool gaussianLoaded = true;
+    bool gaussianFailed = false;
     
     for (unsigned int i = 0; i < gaussian.size(); i++) {
 
@@ -326,30 +332,35 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             // set the address
             P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_ADDR,
                     ddcSelect | ramSelect | ramAddr);
+            usleep(1);
     
             // write the value
             // LS word first
             P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_LSW,
                     gaussian[i] & 0xFFFF);
+            usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
             P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_MSW,
                     (gaussian[i] >> 16) & 0x3);
+            usleep(1);
     
             // latch coefficient
             P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x1);
+            usleep(1);
     
             // disable writing (gaussian readback only succeeds if we do this)
             P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x0);
+            usleep(1);
     
             // read back the programmed value; we need to do this in two words 
             // as above.
             unsigned int readBack;
             uint32_t kaiser_lsw;
             uint32_t kaiser_msw;
-            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_LSW, kaiser_lsw);
-            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_MSW, kaiser_msw);
+            P7142_REG_READ(_sd3c.BAR2Base + GAUSSIAN_READ_LSW, kaiser_lsw);
+            P7142_REG_READ(_sd3c.BAR2Base + GAUSSIAN_READ_MSW, kaiser_msw);
             readBack = kaiser_msw << 16 | kaiser_lsw;
             if (readBack == gaussian[i]) {
                 coeffLoaded = true;
@@ -372,10 +383,10 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             std::cout << " -- FAILED!" << std::endl;
         }
         
-        gaussianLoaded |= coeffLoaded;
+        gaussianFailed |= !coeffLoaded;
     }
 
-    if (gaussianLoaded) {
+    if (!gaussianFailed) {
         std::cout << gaussian.size()
                 << " Gaussian filter coefficients successfully loaded" << std::endl;
     } else {
@@ -385,7 +396,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // return to decimal output
     std::cout << std::dec;
 
-    return kaiserLoaded && gaussianLoaded;
+    return !kaiserFailed && !gaussianFailed;
 
 }
 

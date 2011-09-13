@@ -652,18 +652,7 @@ p7142sd3cDn::read(char* buf, int n) {
     if (!isSimulating()) {
         int r =  p7142Dn::read(buf, n);
         assert(r == n);
-        /**
-        std::cout << "read " << r << " bytes" << std::endl;
-        std::cout << std::hex;
-	    for (unsigned int i = 0; i < (unsigned int)r; i++) {
-	        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)buf[i] << " ";
-	        if (!((i+1) % 40)) {
-	            std::cout << std::endl;
-	        }
-	    }
-	    std::cout << std::dec << std::endl;;
-	    **/
-        return r;
+	    return r;
     }
 
     // ************ simulation mode *************
@@ -886,6 +875,7 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
         }
         // read one beam into buf
         r = read(_buf, _beamLength);
+        //std::cout << std::endl << __PRETTY_FUNCTION__ << "read " << r << " bytes" << std::endl;
         assert(r == _beamLength);
 
         // read the next tag word

@@ -1,6 +1,20 @@
 #ifndef P71XX_H_
 #define P71XX_H_
 
+#include <iostream>
+#include <iomanip>
+#define DUMP_BUF(addr_, bytes_) {\
+std::cout << std::endl << __PRETTY_FUNCTION__  << ":" << __LINE__ << " " << bytes_ << " bytes" << std::endl; \
+std::cout << std::hex; \
+for (unsigned int i_ = 0; i_ < (unsigned int)bytes_; i_++) { \
+	std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)(addr_[i_]) << " "; \
+	if (!((i_+1) % 40)) { \
+		std::cout << std::endl; \
+	} \
+} \
+std::cout << std::dec << std::endl; \
+}
+
 #include "ptkdrv.h"
 #include "ptkddr.h"
 #include "math.h"
@@ -11,6 +25,11 @@
 #include <string.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <vector>
+#include <boost/circular_buffer.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/condition.hpp>
+
 
 #ifdef OPT_428
 #include "ptk7142_428.h"
@@ -30,8 +49,72 @@
 
 namespace Pentek {
 
-	/// Base class for a p7142 digital transceiver card.
+/// The size of the dma transfers from the Pentek to user space.
+/// This determines the size of the buffers that the DMA transfers
+/// are collected in, and the size of the pending read buffer.
+#define DMABUFSIZE 65536
+
+class p71xx;
+
+/// This structure holds user data associated with each
+/// dma channel. A pointer to this structure is registered
+/// with WinDriver, and that pointer is delivered to the
+/// dma handler for each dma transfer complete interrupt.
+struct DmaHandlerData {
+	int chan;
+	Pentek::p71xx* p71xx;
+};
+
+	/// Foundation class for a p7142 digital transceiver card.
+	/// Card configuration and interaction are managed via the
+    /// ReadyFlow C API.
+    ///
+	/// <h1>Overview</h1>
+	/// ReadyFlow uses WinDriver to provide access to the PCI
+	/// interface. There are two activities: reading and writing to the
+	/// Pentek PCI register space, and interacting with DMA transfers
+	/// from the card.
 	///
+	/// The PCI address space is mapped directly to registers in the
+	/// Pentek PCI FPGA and the signal FPGA. Controlling the Pentek functions
+	/// in this manner logical, although fairly involved.
+	///
+	/// The DMA system functions by allocating a collection of DMA buffers,
+	/// which will be directly written into by the Pentek card. When a transfer
+	/// is completed, a dma "interrupt" is triggered, which asynchronously
+	/// executes a C handler function in the user process space. The DMA
+	/// is configured to loop continuously through 4 DMA buffers.
+    ///
+	/// A system of buffers and logic is used to capture the delivered data,
+	/// buffer it through system slowdowns, and feed it out to data read requests.
+	///
+	/// <h1>The Buffer scheme</h1>
+	/// Three buffer systems are used:
+	/// @li The WinDriver DMA buffers
+	/// @li A circular list of buffers for intermediate storage
+	/// @li A pending read buffer, used to accumulate bytes to satisfy read requests.
+	///
+	/// @li Each DMA interrupt causes dmaIntHandler() to be entered
+	/// @li dmaIntHandler() calls p71xx::dmaInterrupt(), which transfers
+	/// the dma buffer data to the circular buffer list.
+	/// @li p71xx::read() will attempt to copy bytes from the circular
+	/// buffers to the pending read buffer. If the pending read buffer
+	/// has enough bytes to satisfy the the request, they will be transferred to
+	/// the caller buffer and the read will return.
+	/// @li Otherwise, p71xx::read() will block until another buffer is
+	/// added in the circular buffer list.
+	///
+	/// The circular buffer list allows for a large number of DMA transfers to
+	/// be saved in times of heavy system load. (However, it's not clear that
+	/// the DMA interrupts will even be delivered in times of heavy load).
+	///
+	/// The pending read buffer is not strictly necessary. read() requests
+	/// could be filled incrementaly out of the circular buffers. But the pending
+	/// read buffer makes the booing keeping much easier, and the logic simpler.
+	/// If performance appears to be an issue, this could be one area to look at
+	/// for a redesign.
+	///
+	/// <h1>ReadyFlow</h1>
     /// ReadyFlow seems to have two methods of configuration manipulation. At
     /// the highest level, a structure with fields corresponding
     /// to many of the GateFLow options is provided for each subsystem. The
@@ -70,8 +153,11 @@ namespace Pentek {
 			/// Return true iff we're in simulation mode.
 			/// @return true iff we're in simulation mode.
 			bool isSimulating() const { return _simulate; }
-            void stop();
-            void start();
+			/// @todo Do we need to be calling these functions? It was done in the Linux driver and readyflow,
+			/// but they don't seem to do anything.
+            void enableGateGen();
+            void disableGateGen();
+            void dmaInterrupt(int chan);
 
 		protected:
 			/// Initialize the ReadyFlow library.
@@ -105,22 +191,51 @@ namespace Pentek {
             void start(int chan);
             /// stop the DMA for the specified DMA channel.
             void stop(int chan);
+            /// Read bytes from the channel. If no data are
+            /// available, the thread will be blocked. The request will not
+            /// return until the exact number of requested bytes can
+            /// be returned.
+            /// Note that multiple threads will be accessing this routine,
+            /// can be individually blocked by the call.
+            /// @param chan The channel (0-3).
+            /// @param buf Buffer to receive the bytes..
+            /// @param bytes The number of bytes.
+            /// @return The number of bytes read. If an error occurs, minus
+            /// one will be returned.
+            int read(int chan, char* buf, int bytes);
 
+            /// ReadyFlow
             void* hDev;
-            PTK714X_DMA_HANDLE* dmaHandle[4];
-            PTK714X_DMA_BUFFER  dmaBuf[4];
-            DWORD           BAR0Base;          /* PCI BAR0 base address */
-            DWORD           BAR2Base;          /* PCI BAR2 base address */
-            DWORD           slot;
-            unsigned int    moduleId;
-            P7142_REG_ADDR       p7142Regs;
-            P7142_PCI_PARAMS     p7142PciParams;      /* PCI7142 PCI params */
-            P7142_DMA_PARAMS     p7142DmaParams;      /* PCI7142 DMA params */
-            P7142_BOARD_PARAMS   p7142BoardParams;    /* board params       */
-            P7142_INPUT_PARAMS   p7142InParams;       /* input block params */
-            P7142_OUTPUT_PARAMS  p7142OutParams;      /* output block params */
-            P7142_DAC5686_PARAMS p7142Dac5686Params; /* DAC5686 params */
-            volatile unsigned int    *gateGenReg;
+            /// ReadyFlow
+            PTK714X_DMA_HANDLE*   dmaHandle[4];
+            /// ReadyFlow
+            PTK714X_DMA_BUFFER    dmaBuf[4];
+            /// ReadyFlow
+            DmaHandlerData        _dmaHandlerData[4];
+            /// ReadyFlow
+            DWORD                 BAR0Base;            /* PCI BAR0 base address */
+            /// ReadyFlow
+            DWORD                 BAR2Base;            /* PCI BAR2 base address */
+            /// ReadyFlow
+            DWORD                 slot;
+            /// ReadyFlow
+            unsigned int          moduleId;
+            /// ReadyFlow
+            P7142_REG_ADDR        p7142Regs;
+            /// ReadyFlow
+            P7142_PCI_PARAMS      p7142PciParams;      /* PCI7142 PCI params  */
+            /// ReadyFlow
+            P7142_DMA_PARAMS      p7142DmaParams;      /* PCI7142 DMA params  */
+            /// ReadyFlow
+            P7142_BOARD_PARAMS    p7142BoardParams;    /* board params        */
+            /// ReadyFlow
+            P7142_INPUT_PARAMS    p7142InParams;       /* input block params  */
+            /// ReadyFlow
+            P7142_OUTPUT_PARAMS   p7142OutParams;      /* output block params */
+            /// ReadyFlow
+            P7142_DAC5686_PARAMS  p7142Dac5686Params;  /* DAC5686 params      */
+
+            volatile unsigned int *gateGenReg;
 
             int* adcData;
             /// The root device name
@@ -137,6 +252,33 @@ namespace Pentek {
             bool _isReady;
             /// true if an AD channel is running
             bool _adcActive[4];
+            /// A circular list of buffers, filled from the dma transfers.
+            /// One list per channel.
+            boost::circular_buffer<std::vector<char> > _circBufferList[4];
+            /// A mutex used to control access to the circular buffer list,
+            /// which is filled during DMA interrupts and emptied by
+            /// read requests.
+            boost::mutex _circBufferMutex[4];
+            /// A condition variable that will activate when
+            /// the circular buffer list is non-empty.
+            boost::condition_variable _circBufferCond[4];
+            /// This is a vector, one per channel, used for temporary
+            /// storage to satisfy read requests. To avoid ongoing
+            /// resizing, we allocate it to it's full length (2*_dmaBufSize).
+            /// Bytes are added to the end of this buffer, and sucked out of
+            /// the beginning to satisfy read requests.,
+            /// _pendingReadIn tracks how full the buffer currently is.
+            std::vector<char> _pendingReadBuf[4];
+            /// The number of bytes currently contained in _pendingReadBuf.
+            /// One per channel.
+            unsigned int _pendingReadIn[4];
+            /// The number bytes to be transferred in each DMA transaction. Note
+            /// that each Pentek channel can make use of up to four DMA buffers,
+            /// filling them in a round-robin fashion.
+            int _dmaBufSize;
+            /// The number in the dma interrupt chain for each channel.
+            /// The chain is 4 buffers long, and then it wraps back.
+            int _chainIndex[4];
 
 	};
 }

@@ -2,55 +2,37 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <iostream>
+#include <iomanip>
 #include <cstdio>
 #include <cstdlib>
 
 
 using namespace Pentek;
 
-sem_t dmaSemKey;
-
-/************************************************************************
- Function: dmaIntHandler
-
- Description: This routine serves as the User Mode interrupt handler
-              for this example.
-
- Inputs:      hDev - 7142 Device Handle
-              dmaChannel - DMA channel generating the interrupt(0-3)
-              pData - Pointer to user defined data
-              pIntResults - Pointer to the interrupt results structure
-
- Returns:     none
-
- Notes:       DMA interrupts are cleared by the Kernel Device Driver.
-              DMA interrupts are enabled when this routine is executed.
-************************************************************************/
-extern "C" void dmaIntHandler(
-		PVOID hDev,
-		unsigned int dmaChannel,
-		PVOID pData,
-        PTK714X_INT_RESULT *pIntResult);
-
-int dmaCount[4] = {0,0,0,0};
-long dmaTotal = 0;
-
+/// This function is called by windriver each time a dma transfer is complete.
+/// The user data (pData) that is delivered with the interrupt contains a
+/// pointer to an instance of p71xx. The p71xx::dmaInterrupt() method is called
+/// to handle the actual processing of the dma transfer.
+///
+/// DMA interrupts are cleared by the Kernel Device Driver.
+///
+/// DMA interrupts are enabled when this routine is executed.
+/// @param hDev The 7142 Device Handle
+/// @param dmaChannel - DMA channel generating the interrupt(0-3)
+/// @param pData - Pointer to user defined data
+/// @param pIntResults - Pointer to the interrupt results structure
 void dmaIntHandler(
 		PVOID hDev,
 		unsigned int dmaChannel,
 		PVOID pData,
         PTK714X_INT_RESULT *pIntResult)
 {
-	dmaTotal++;
-	dmaCount[dmaChannel]++;
-	if (!(dmaTotal % 100)) {
-		for (int i = 0; i < 4; i++) {
-			printf("%d ", dmaCount[i]);
-		}
-		printf("\n");
-	}
 
-    sem_post(&dmaSemKey);
+	// Cast the user data to DmaHandlerData*
+	DmaHandlerData* dmaData = (DmaHandlerData*) pData;
+
+	// Call the dmaInterrupt member function in the p71xx object
+	dmaData->p71xx->dmaInterrupt(dmaChannel);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +41,8 @@ _devName(devName),
 _ctrlFd(-1),
 _simulate(simulate),
 _mutex(),
-_isReady(false)
+_isReady(false),
+_dmaBufSize(DMABUFSIZE)
 {
     boost::recursive_mutex::scoped_lock guard(_mutex);
     // If we're simulating, things are simple...
@@ -82,12 +65,98 @@ p71xx::~p71xx() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     /* cleanup for exit */
-    sem_destroy(&dmaSemKey);
     PTK714X_DeviceClose(hDev);
     PTK714X_LibUninit();
     std::cout << "ReadyFlow closed" << std::endl;
 
     return;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+void
+p71xx::dmaInterrupt(int chan) {
+	/// @todo this logic needs to be refactored so that there is no dynamic allocation
+	/// happening during dma interrrupts.
+	std::vector<char> data;
+	data.resize(_dmaBufSize);
+
+	/// Copy the data into the vector
+	memcpy(&data[0], (char*)dmaBuf[chan].usrBuf + _chainIndex[chan]*_dmaBufSize, _dmaBufSize);
+
+	// lock access to the circular buffer and copy dma data to it
+	{
+		boost::lock_guard<boost::mutex> lock(_circBufferMutex[chan]);
+		// put the vector in the circular buffer
+		_circBufferList[chan].push_back(data);
+	}
+
+	// use the condition variable to tell data consumer (i.e. read())
+	// that new data are avaialble.
+	_circBufferCond[chan].notify_one();
+
+	// move to the next buffer in the dma chain
+	_chainIndex[chan]++;
+	if (_chainIndex[chan] == 4) {
+		_chainIndex[chan] = 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+int
+p71xx::read(int chan, char* buf, int bytes) {
+
+	// this is where it all happens
+
+	// fillBuffers[chan] has room for 2*_dmaBufSize, so a read request
+	// cannot ask for more than half of this, since we may need to
+	// append one of the data blocks from the circular buffer list
+	// to fillBuffers[chan].
+	assert(bytes <= _dmaBufSize);
+
+	// Wait until there are enough bytes in _fillBuffers[chan]
+	// to satisfy this request.
+	while (_pendingReadIn[chan] < bytes) {
+		{
+			// block until we have at least one dma buffer available
+			// in the circular buffer. Note that unique_lock
+			// releases the lock when it goes out of scope.
+			boost::unique_lock<boost::mutex> lock(_circBufferMutex[chan]);
+			while (_circBufferList[chan].size() == 0) {
+				_circBufferCond[chan].wait(lock);
+			}
+			// assert that we will not overrun _fillBuffer
+			assert(_pendingReadIn[chan]+_dmaBufSize <= 2*_dmaBufSize);
+			// At least one buffer is available in the circular buffer,
+			// put it into _fillBuffers.
+			size_t start = _pendingReadIn[chan];
+			for (size_t i = 0; i < _dmaBufSize; i++) {
+				_pendingReadBuf[chan][start+i] = _circBufferList[chan][0][i];
+			}
+			//DUMP_BUF(_buffers[chan][0],  _dmaBufSize);
+			_pendingReadIn[chan] += _dmaBufSize;
+			// and remove it from the circular buffer
+			_circBufferList[chan].pop_front();
+		}
+	}
+
+	// copy requested bytes from _fillBuffers[chan] to the user buffer
+	for (size_t i = 0; i < bytes; i++) {
+		buf[i] = _pendingReadBuf[chan][i];
+	}
+
+	// move unused data to the front of the buffer
+	for (size_t i = 0; i < _pendingReadIn[chan]-bytes; i++) {
+		_pendingReadBuf[chan][i] = _pendingReadBuf[chan][i+bytes];
+	}
+	_pendingReadIn[chan] -= bytes;
+
+	//DUMP_BUF(buf, bytes);
+
+	// assert that we don't have a math logic error
+	assert(_pendingReadIn[chan] >=0);
+	//std::cout << "returning from read for channel " << chan << " fillbuffer size is " << _fillSize[chan] << std::endl;
+
+	return bytes;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -202,16 +271,11 @@ void p71xx::configDmaParameters() {
      * DMA descriptor and transfer size is set to buffer size.
      */
 
-	/* Create a DMA Complete semaphore */
-	if((sem_init(&dmaSemKey,0,0))<0) {
-		std::cerr << __FILE__ << ":" << __FUNCTION__ << ": Unable to create a DMA complete semaphore." << std::endl;
-		abort();
-	}
 
-    int dmaBufSize = 65536;
 	int status;
 
 	for (int chan = 0; chan < 4; chan++) {
+
 		// open a DMA channel (required before we allocate the buffer)
 		status = PTK714X_DMAOpen(hDev, chan, &dmaHandle[chan]);
 		if (status != PTK714X_STATUS_OK) {
@@ -221,7 +285,7 @@ void p71xx::configDmaParameters() {
 		std::cout << "DMA opened for channel " << chan << ", handle is " << dmaHandle[chan] << std::endl;
 		// allocate DMA buffers, one per channel. All descriptors
 		// for the channel will use consecutive areas in this buffer
-		status = PTK714X_DMAAllocMem(dmaHandle[chan], dmaBufSize*4, &dmaBuf[chan], (BOOL)0);
+		status = PTK714X_DMAAllocMem(dmaHandle[chan], _dmaBufSize*4, &dmaBuf[chan], (BOOL)0);
 		if (status != PTK714X_STATUS_OK) {
 			std::cerr << __FILE__ << ":" << __FUNCTION__ << ": Unable to allocate a DMA buffer for channel " << chan << std::endl;
 			abort();
@@ -255,10 +319,10 @@ void p71xx::configDmaParameters() {
 			P7142DmaDescptrSetup(
 			&(p7142DmaParams.dmaChan[chan]),
 			d,                                                     /* descriptor number */
-			dmaBufSize,                                            /* transfer count in bytes */
+			_dmaBufSize,                                           /* transfer count in bytes */
 			PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
 			PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
-			(unsigned long)dmaBuf[chan].kernBuf+d*dmaBufSize);     /* buffer address */
+			(unsigned long)dmaBuf[chan].kernBuf+d*_dmaBufSize);    /* buffer address */
 		}
 
 		/* flush FIFO */
@@ -267,8 +331,23 @@ void p71xx::configDmaParameters() {
 
 		/* Flush the CPU caches */
 		PTK714X_DMASyncCpu(&dmaBuf[chan]);
-	}
 
+		// initialize the dma chain index
+		_chainIndex[chan] = 0;
+
+		// Initialize the data that will be delivered to the dma interrupt handler
+		_dmaHandlerData[chan].chan  = chan;
+		_dmaHandlerData[chan].p71xx = this;
+
+		// resize the circular buffers
+		_circBufferList[chan].set_capacity(100);
+
+		// allocate enough space in the fill buffers for two dma buffers
+		_pendingReadBuf[chan].resize(2*_dmaBufSize);
+
+		// initialize the end of the data in _fillBuffers
+		_pendingReadIn[chan] = 0;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -406,14 +485,16 @@ p71xx::start(int chan) {
 					 chan);
 
 	// enable the FIFO
-	P7142_SET_FIFO_CTRL_FIFO_ENABLE(                            \
-		p7142Regs.BAR2RegAddr.adcFifo[chan].FifoCtrl, \
+	P7142_SET_FIFO_CTRL_FIFO_ENABLE(
+		p7142Regs.BAR2RegAddr.adcFifo[chan].FifoCtrl,
 		P7142_FIFO_ENABLE);
 
-	// enable the DMA interrupt, on descriptor finish
+	// enable the DMA interrupt, on descriptor finish.
+	// _dmaHandlerData contains a pointer to "this", as well
+	// as other details.
 	int status = PTK714X_DMAIntEnable(dmaHandle[chan],
 								   PTK714X_DMA_DESCRIPTOR_FINISH,
-								   NULL,
+								   &_dmaHandlerData[chan],
 								   (PTK714X_INT_HANDLER)dmaIntHandler);
 
 	if (status != PTK714X_STATUS_OK) {
@@ -428,18 +509,11 @@ p71xx::start(int chan) {
 
 	_adcActive[chan] = true;
 
-	/* When DMA has completed, it will post the semphore */
-	//int status = sem_wait(&dmaSemKey);
-	//if (status != 0)
-	//	printf("Timeout waiting for DMA complete semaphore for DMA %d\n", chan);
-
-	//std::cout << "semaphore received" << std::endl;
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p71xx::start() {
+p71xx::enableGateGen() {
 	/* enable FIFO writes (release Gate from reset) */
 	///@todo Temporarily using the GateFlow gating signal to
 	/// enable/disable data flow. This will be changed to
@@ -452,7 +526,7 @@ p71xx::start() {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p71xx::stop() {
+p71xx::disableGateGen() {
 
     /* disable FIFO writes (set Gate in reset) */
 	///@todo Temoprarily using the GateFlow gating signal to

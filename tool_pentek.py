@@ -71,6 +71,7 @@ def pentek(env):
     env.AppendUnique(CPPPATH   =[thisdir, PENTEK_INCLUDE,])
     env.AppendUnique(CPPDEFINES=['PENTEK_LINUX',])
     env.AppendLibrary('pentek')
+    env.AppendLibrary('boost_thread')
     env.AppendDoxref('pentek')
     env.Require(tools)
 

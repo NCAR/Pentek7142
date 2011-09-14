@@ -1,10 +1,3 @@
-/*
- * p7142Dn.h
- *
- *  Created on: Oct 4, 2010
- *      Author: burghart
- */
-
 #ifndef P7142DN_H_
 #define P7142DN_H_
 
@@ -13,11 +6,10 @@
 
 namespace Pentek {
 class p7142;
-/*!
- * @brief A p7142 downconverter.
- * This class reads and controls downconversion for one receiver channel of a 
- * P7142 transceiver card.
- */ 
+
+/// @brief A p7142 downconverter.
+/// This class reads and controls downconversion for one receiver channel of a
+/// P7142 transceiver card.
 class p7142Dn {
     public:
     // Class p7142 is a friend; the intention is that construction of
@@ -64,30 +56,24 @@ class p7142Dn {
         /// Return the device path for the downconverter.
         /// @return The device path
         std::string dnName();
-        /// flush the I/O buffers and hardware fifos
-        void flush();
         /// Are we using the card's internal clock?
         /// @return true iff this channel using the card's internal clock
         bool usingInternalClock() const;
         /// Get the current bypass divider decimation factor
         /// @return the current bypass divider decimation factor
         int bypassDivider() const;
-        /**
-         * Set the bypass divider decimation factor
-         * @param bypassdiv the desired bypass divider decimation factor
-         * @return true if decimation is set successfully
-         */
+        ///
+        /// Set the bypass divider decimation factor
+        /// @param bypassdiv the desired bypass divider decimation factor
+        /// @return true if decimation is set successfully
         bool setBypassDivider(int bypassdiv) const;
-        /**
-         * Return the channel id (0-3) for this downconverter.
-         * @return the channel id (0-3) for this downconverter.
-         */
+        ///
+        /// Return the channel id (0-3) for this downconverter.
+        /// @return the channel id (0-3) for this downconverter.
         int chanId() const { return _chanId; }
-        /**
-         * Are we simulating existence of a real P7142 card?
-         * @return true iff we are simulating a P7142 card rather than using
-         * a real one.
-         */
+        /// Are we simulating existence of a real P7142 card?
+        /// @return true iff we are simulating a P7142 card rather than using
+        /// a real one.
         bool isSimulating() const;
         
 
@@ -101,7 +87,7 @@ class p7142Dn {
         /// The full device name for the downconverter
         std::string _dnName;
         /// The downconverter device file descriptor
-        int _dnFd;
+        //int _dnFd;
         /// The wavelength for simulated data
         unsigned int _simWaveLength;
         /// The counter for keeping track of the current phase during simulation

@@ -114,11 +114,20 @@ struct DmaHandlerData {
 	/// If performance appears to be an issue, this could be one area to look at
 	/// for a redesign.
 	///
+    /// <h1>Lineage</h1>
+    /// The p71xx class was mostly adapted from the ReadyFlow example
+    /// programs. Its C ancestry is obvious. There are many references
+    /// to the DAC5686. Our Pentek cards are customized, where the
+    /// DAC5686 was replaced by the DAC5687. We retained the DAC5686
+    /// nomenclature so as to match the ReadyFlow usage.
+    ///
 	/// <h1>ReadyFlow</h1>
     /// ReadyFlow seems to have two methods of configuration manipulation. At
     /// the highest level, a structure with fields corresponding
     /// to many of the GateFLow options is provided for each subsystem. The
-    /// subsystems are PCI, DMA, board, input (A/D) and output (D/A).
+    /// subsystems are PCI, DMA, board, input (down conversion), output (up conversion)
+    /// and DAC.
+    ///
 	/// The user initializes a structure using a SetDefault() call,
 	/// e.g. P7142SetPCIDefaults(). Individual fields in the structure are
 	/// modified to configure for non-default behavior. The structure is then
@@ -127,7 +136,7 @@ struct DmaHandlerData {
 	///
 	/// ReadyFlow also provides get/set macros for manipulating individual
 	/// control bits. So, once a section has had a complete initial configuration
-	/// using InitRegs(), the  macros can be used to access individual
+	/// using P7142InitInitRegs(), the  macros can be used to access individual
 	/// control bits as needed. In fact, the InitRegs() functions are built
 	/// around these macros.
 	///
@@ -153,11 +162,16 @@ struct DmaHandlerData {
 			/// Return true iff we're in simulation mode.
 			/// @return true iff we're in simulation mode.
 			bool isSimulating() const { return _simulate; }
+			/// This routine is called from the ReadyFlow dma interrupt handler
+			/// dmaIntHandler(). It copies data from the dma interrupt buffer to the circular
+			/// buffer list. According to the ReadyFlow notes, dma interrupts are disabled
+			/// while dmaIntHandler() is executing, and so they will be disabled as well
+			/// while we are in this routine.
+            void dmaInterrupt(int chan);
 			/// @todo Do we need to be calling these functions? It was done in the Linux driver and readyflow,
 			/// but they don't seem to do anything.
             void enableGateGen();
             void disableGateGen();
-            void dmaInterrupt(int chan);
 
 		protected:
 			/// Initialize the ReadyFlow library.
@@ -179,11 +193,12 @@ struct DmaHandlerData {
             static int bufset(int fd, int intbufsize, int bufN);
             /// Configure the board parameters, in p7142BoardParams
             void configBoardParameters();
-            /// Configure the DMA parameters, in p7142DmaParams
+            /// Configure the DMA parameters. The DMA buffering scheme is also
+            /// allocated and configured here.
             void configDmaParameters();
-            /// Configure the In parameters, in p7142InParams
+            /// Configure the down conversion path parameters
             void configInParameters();
-            /// Configure the Out parameters, in p7142OutParams
+            /// Configure the up conversion path parameters
             void configOutParameters();
             /// Configure the DAC parameters, in p7142Dac5686Params
             void configDacParameters();
@@ -204,37 +219,40 @@ struct DmaHandlerData {
             /// one will be returned.
             int read(int chan, char* buf, int bytes);
 
-            /// ReadyFlow
+            /// ReadyFlow device descriptor.
             void* hDev;
-            /// ReadyFlow
+            /// ReadyFlow dma handles, one per channel
             PTK714X_DMA_HANDLE*   dmaHandle[4];
-            /// ReadyFlow
+            /// ReadyFlow dma buffer address pointers, in user space
             PTK714X_DMA_BUFFER    dmaBuf[4];
-            /// ReadyFlow
+            /// ReadyFlow user data. A pinoter to these will be passed into
+            /// dmaIntHandler().
             DmaHandlerData        _dmaHandlerData[4];
-            /// ReadyFlow
-            DWORD                 BAR0Base;            /* PCI BAR0 base address */
-            /// ReadyFlow
-            DWORD                 BAR2Base;            /* PCI BAR2 base address */
-            /// ReadyFlow
+            /// ReadyFlow PCI BAR0 base address.
+            DWORD                 BAR0Base;
+            /// ReadyFlow PCI BAR2 base address.
+            DWORD                 BAR2Base;
+            /// ReadyFlow PCI slot number.
             DWORD                 slot;
-            /// ReadyFlow
+            /// ReadyFlow module identifier.
             unsigned int          moduleId;
-            /// ReadyFlow
+            /// ReadyFlow 7142 register addresses in PCI space.
             P7142_REG_ADDR        p7142Regs;
-            /// ReadyFlow
-            P7142_PCI_PARAMS      p7142PciParams;      /* PCI7142 PCI params  */
-            /// ReadyFlow
-            P7142_DMA_PARAMS      p7142DmaParams;      /* PCI7142 DMA params  */
-            /// ReadyFlow
-            P7142_BOARD_PARAMS    p7142BoardParams;    /* board params        */
-            /// ReadyFlow
-            P7142_INPUT_PARAMS    p7142InParams;       /* input block params  */
-            /// ReadyFlow
-            P7142_OUTPUT_PARAMS   p7142OutParams;      /* output block params */
-            /// ReadyFlow
-            P7142_DAC5686_PARAMS  p7142Dac5686Params;  /* DAC5686 params      */
+            /// ReadyFlow parameters for PCI configuration.
+            P7142_PCI_PARAMS      p7142PciParams;
+            /// ReadyFlow parameters for DMA configuration.
+            P7142_DMA_PARAMS      p7142DmaParams;
+            /// ReadyFlow parameters for overall board configuration.
+            P7142_BOARD_PARAMS    p7142BoardParams;
+            /// ReadyFlow parameters for the down conversion path configuration.
+            P7142_INPUT_PARAMS    p7142InParams;
+            /// ReadyFlow parameters for the up conversion path configuration.
+            P7142_OUTPUT_PARAMS   p7142OutParams;
+            /// ReadyFlow parameters for DAC configuration.
+            P7142_DAC5686_PARAMS  p7142Dac5686Params;
 
+            /// The PCI address of the GateFlow gte generation control
+            /// register. It is not clear that we need to even use this.
             volatile unsigned int *gateGenReg;
 
             int* adcData;

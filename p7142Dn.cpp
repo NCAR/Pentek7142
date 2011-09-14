@@ -1,9 +1,3 @@
-/*
- * p7142Dn.cpp
- *
- *  Created on: Oct 5, 2010
- *      Author: burghart
- */
 #include "p7142Dn.h"
 #include "p7142.h"
 
@@ -20,7 +14,7 @@ using namespace Pentek;
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142Dn::p7142Dn(
-        p7142 * p7142,
+        p7142* p7142,
         int chanId,
         int bypassdivrate,
         int simWaveLength,
@@ -28,7 +22,6 @@ p7142Dn::p7142Dn(
         bool internalClock):
   _p7142(*p7142),
   _chanId(chanId),
-  _dnFd(-1),
   _simWaveLength(simWaveLength),
   _angleCount(0),
   _sim4bytes(sim4bytes),
@@ -41,59 +34,26 @@ p7142Dn::p7142Dn(
         return;
     }
 
+    _dnName = _p7142.devName();
+
     p7142->start(chanId);
-
-    return;
-    // create the downconverter device name
-    char c[2];
-    c[0] = '0' + _chanId;
-    c[1] = 0;
-    std::string dnchan(c);
-    dnchan += "BR";
-
-    _dnName = _p7142.devName() + "/dn/" + dnchan;
-
-    // open it
-    _dnFd = open(_dnName.c_str(), O_RDWR);
-    if (_dnFd < 0) {
-        std::cerr << "unable to open " << _dnName << std::endl;
-        perror("error opening pentek device:");
-        abort();
-    }
 
     // Set the clock source.
     int clockSource = internalClock ? CLK_SRC_INTERN : CLK_SRC_FRTPAN;
 
+    /// @todo Figure out how to set the clock source to internal under ReadyFlow
+    /**
     if (ioctl(_dnFd, FIOCLKSRCSET, clockSource) == -1) {
         std::cerr << "unable to set the clock source for "
                 << _dnName << std::endl;
         abort();
     }
-    // Using our firmware, we *must* reset the Pentek DCM after changing 
-    // clock source
-    _p7142.resetDCM();
-
-    // set the bypass divider
-    if (! setBypassDivider(bypassdivrate)) {
-        abort();
-    }
-
-    // flush the device read buffers
-    if (ioctl(_dnFd, FIOFLUSH, 0) == -1) {
-        std::cerr << "unable to flush for " << _dnName << std::endl;
-        abort();
-    }
-
-    // clear the over/under run counters
-    overUnderCount();
+    **/
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142Dn::~p7142Dn() {
   boost::recursive_mutex::scoped_lock guard(_mutex);
-  
-  if (_dnFd >= 0)
-    close (_dnFd);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -115,13 +75,15 @@ int
 p7142Dn::overUnderCount() {
     //boost::recursive_mutex::scoped_lock guard(_mutex);
 
+	int count = 0;
     // if simulate, indicate no errors.
     if (isSimulating()) {
-        return 0;
+        return count;
     }
 
-    return 0;
-
+    /// @todo Need to track down how the overflow count was
+    /// done in the pentek driver, and migrate to ReadyFlow usage here.
+    /**
     int count = ioctl(_dnFd, FIOGETOVRCNT);
     if (count == -1) {
         std::cout << "unable to get ovr/under for "
@@ -137,6 +99,7 @@ p7142Dn::overUnderCount() {
         perror("");
         return -1;
     }
+     **/
 
     return count;
 }
@@ -224,29 +187,6 @@ p7142Dn::bytesRead() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void p7142Dn::flush() {
-  boost::recursive_mutex::scoped_lock guard(_mutex);
-  
-  // flush the device read buffers. This will clear the fifos,
-  // which will probably contain data since we are not able yet
-  // to disable the timers, and so the fifos may have been
-  // filling. When we do implement true timer control, this
-  // flush will probably not be needed.
-  if (isSimulating())
-      return;
-  
-  /// @todo Reset the A/D FIFOS. Do we need to do some sort of re-initialization
-  /// of the DMA?
-
-  //if (ioctl(_dnFd, FIOFLUSH, 0) == -1) {
-  //  std::cerr << "unable to flush for " << _dnName << std::endl;
-  //  perror("");
-  //}
-
-  std::cout << "flush performed on " << _dnName << std::endl;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 bool
 p7142Dn::usingInternalClock() const {
     boost::recursive_mutex::scoped_lock guard(_mutex);
@@ -259,30 +199,16 @@ p7142Dn::usingInternalClock() const {
     P7142_GET_MSTR_BUS_CTRL_SEL_CLK(_p7142.p7142Regs.BAR2RegAddr.masterAControl, clkSel);
     return (clkSel == P7142_MSTR_CTRL_SEL_CLK_EXT_CLK);
 
-    //int clockSource;
-    //if ((clockSource = ioctl(_dnFd, FIOCLKSRCGET, 0)) == -1) {
-    //    std::cerr << __FUNCTION__ << ": ioctl error on FIOCLKSRCGET: " <<
-    //            strerror(errno);
-    //}
-    //return(clockSource == CLK_SRC_INTERN);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 int
 p7142Dn::bypassDivider() const {
-    //boost::recursive_mutex::scoped_lock guard(_mutex);
 
-    if (isSimulating())
+	if (isSimulating())
         return(0);
     
     return (*_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide) + 1;
-
-    //int bypassdiv;
-    //if ((bypassdiv = ioctl(_dnFd, FIOBYPDIVGET, 0)) == -1) {
-    //  std::cerr << "Unable to get the bypass divider for "
-    //        << _dnName << std::endl;
-    //  perror(__FUNCTION__);
-    //}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -299,15 +225,5 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
     	return false;
     }
 
-    return true;
-
-
-    // set the bypass divider
-    if (ioctl(_dnFd, FIOBYPDIVSET, bypassdiv) == -1) {
-      std::cerr << "unable to set the bypass divider for "
-            << _dnName << " to " << bypassdiv << std::endl;
-      perror(__FUNCTION__);
-      return false;
-    }
     return true;
 }

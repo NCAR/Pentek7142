@@ -1,10 +1,3 @@
-/*
- * p7142sd3cDn.h
- *
- *  Created on: Oct 5, 2010
- *      Author: burghart
- */
-
 #ifndef P7142SD3CDN_H_
 #define P7142SD3CDN_H_
 
@@ -207,14 +200,6 @@ protected:
 
     /// Program the coefficients for the Gaussian and Kaiser filters.
     bool loadFilters(FilterSpec& gaussian, FilterSpec& kaiser);
-
-    /// Set the interrupt buffer size for the pentek. Useful
-    /// for trying to control the interrupt rate, based on how
-    /// fast the FPGA is running.
-    /// @todo We don't currently use this, because there were
-    /// indications that it was causing the driver to drop
-    /// blocks of data.
-    void setInterruptBufSize();
 
     // The data handling infrastructure.
 

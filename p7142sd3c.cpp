@@ -1,10 +1,3 @@
-/*
- * p7142sd3c.cpp
- *
- *  Created on: Jan 26, 2009
- *      Author: martinc
- */
-
 #include "p7142sd3c.h"
 
 #include <fcntl.h>

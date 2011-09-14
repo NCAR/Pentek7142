@@ -1,9 +1,3 @@
-/*
- * p7142Up.cpp
- *
- *  Created on: Oct 12, 2010
- *      Author: burghart
- */
 #include "p7142Up.h"
 #include "DDCregisters.h"
 

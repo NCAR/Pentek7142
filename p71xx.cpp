@@ -107,7 +107,7 @@ p71xx::read(int chan, char* buf, int bytes) {
 
 	// this is where it all happens
 
-	// fillBuffers[chan] has room for 2*_dmaBufSize, so a read request
+	// _pendingReadBuf[chan] has room for 2*_dmaBufSize, so a read request
 	// cannot ask for more than half of this, since we may need to
 	// append one of the data blocks from the circular buffer list
 	// to fillBuffers[chan].
@@ -149,12 +149,10 @@ p71xx::read(int chan, char* buf, int bytes) {
 		_pendingReadBuf[chan][i] = _pendingReadBuf[chan][i+bytes];
 	}
 	_pendingReadIn[chan] -= bytes;
-
 	//DUMP_BUF(buf, bytes);
 
 	// assert that we don't have a math logic error
 	assert(_pendingReadIn[chan] >=0);
-	//std::cout << "returning from read for channel " << chan << " fillbuffer size is " << _fillSize[chan] << std::endl;
 
 	return bytes;
 }
@@ -263,14 +261,8 @@ void p71xx::configBoardParameters() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void p71xx::configDmaParameters() {
 
-    // Board customization
-
-    /* set up DMA parameters - only non-default values are shown
-     *
-     * Set parameters for the selected DMA channel.  The program uses only
-     * DMA descriptor and transfer size is set to buffer size.
-     */
-
+	// Perform all DAM related configuration. Note that the buffering
+	// scheme is initialized here as well.
 
 	int status;
 
@@ -279,18 +271,16 @@ void p71xx::configDmaParameters() {
 		// open a DMA channel (required before we allocate the buffer)
 		status = PTK714X_DMAOpen(hDev, chan, &dmaHandle[chan]);
 		if (status != PTK714X_STATUS_OK) {
-			std::cerr << __FILE__ << ":" << __FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
+			std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
 			abort();
 		}
-		std::cout << "DMA opened for channel " << chan << ", handle is " << dmaHandle[chan] << std::endl;
 		// allocate DMA buffers, one per channel. All descriptors
 		// for the channel will use consecutive areas in this buffer
 		status = PTK714X_DMAAllocMem(dmaHandle[chan], _dmaBufSize*4, &dmaBuf[chan], (BOOL)0);
 		if (status != PTK714X_STATUS_OK) {
-			std::cerr << __FILE__ << ":" << __FUNCTION__ << ": Unable to allocate a DMA buffer for channel " << chan << std::endl;
+			std::cerr << __PRETTY_FUNCTION__ << ": Unable to allocate a DMA buffer for channel " << chan << std::endl;
 			abort();
 		}
-		std::cout << "DMA buffer allocated for channel " << chan << ", buffer is " << std::hex << dmaBuf[chan].usrBuf << std::endl;
 
 		/* Abort any existing transfers */
 		P7142DmaAbort(&(p7142Regs.BAR0RegAddr), chan);
@@ -356,40 +346,40 @@ void p71xx::configInParameters() {
     /* Sync Bus select */
     p7142InParams.inputSyncBusSel = P7142_SYNC_BUS_SEL_A;
 
-	///@todo Temporarily using the GateFlow gating signal to
-	/// enable/disable data flow. This will be changed to
-	/// using the timers for this purpose.
-    ///
-    /* set the gate generator register pointers */
+	///@todo Currently using the GateFlow gating signal to
+	/// enable/disable data flow. Not sure that this is necessary
+    /// or even having any effect..
+
+    //set the gate generator register pointers */
     if (p7142InParams.inputSyncBusSel == P7142_SYNC_BUS_SEL_A)
         gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateAGen);
     else
         gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateBGen);
 
-    /* disable FIFO writes (set Gate in reset) */
+    // disable FIFO writes (set Gate in reset)
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
 
-    /* set FIFO parameters */
+    // set the down conversion FIFO parameters
 
     for (int adchan = 0; adchan < 4; adchan++) {
-    	/* select data packing mode.  It can be unpacked or time-packed.
-		 * The program define is located at the top of the program.
-		 */
+    	// select data packing mode.  It can be unpacked or time-packed.
+		// The program define is located at the top of the program.
+		//
 		p7142InParams.adcFifo[adchan].fifoPackMode = P7142_FIFO_ADC_PACK_MODE_TIME_PACK;
 
-		/* set FIFO decimation.  This allows the input data rate to the
-		 * FIFO to be reduced.  It can be a value from 0 to 0xFFF.  Actual
-		 * decimation is this value plus one.
-		 */
+		// set the FIFO decimation.  This allows the input data rate to the
+		// FIFO to be reduced.  It can be a value from 0 to 0xFFF.  Actual
+		// decimation is this value plus one.
+
 		// set to decimation by 1 here, but will almost always be modified by the user
 		// to an appropriate value.
 		p7142InParams.adcFifoDecimation[adchan] = 0;
 
-		/* The FIFO Almost Full and Almost Empty levels are set to default
-		 * values for all programs.  The values shown here are the default
-		 * values and and are provided to show usage.  Their values must be
-		 * chosen to work with the DMA channel maximum burst count value.
-		 */
+		// The FIFO Almost Full and Almost Empty levels are set to default
+		// values for all programs.  The values shown here are the default
+		// values and and are provided to show usage.  Their values must be
+		// chosen to work with the DMA channel maximum burst count value.
+		//
 		p7142InParams.adcFifo[adchan].fifoAlmostEmptyLevel = 512;
 		p7142InParams.adcFifo[adchan].fifoAlmostFullLevel  = 544;
     }
@@ -400,23 +390,23 @@ void p71xx::configInParameters() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void p71xx::configOutParameters() {
 
-    // DAC customization
+    // Customize the up conversion path
+
     p7142OutParams.dacPllVdd = P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE;
-    /// @todo is the following correct for PLL usage? What do they mean by "bypass"?
+    /// @todo Is the following correct for PLL usage? What do they mean by "bypass"?
     p7142OutParams.dacClkSel = P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS;
     p7142OutParams.outputSyncBusSel = P7142_SYNC_BUS_SEL_A;
     p7142OutParams.outputRefClkFreq = 48.0e6; /// @todo need to get the correct freq. brought into here.
     p7142OutParams.dacFifo.fifoPackMode = P7142_FIFO_DAC_PACK_MODE_16BIT_PACK;
 
-    /* enable or disable word swap */
+    // enable or disable word swap
     p7142OutParams.dacFifo.fifoWordSwap = P7142_FIFO_CTRL_WORD_SWAP_DISABLE;
 
-    /* The FIFO Almost Full and Almost Empty levels are set to default
-     * values for all programs.  The values shown here are the default
-     * values for DAC FIFOs and are provided to show usage.   Their values
-     * must be chosen to work with the DMA channel maximum burst count
-     * value.
-     */
+    // The FIFO Almost Full and Almost Empty levels are set to default
+    // values for all programs.  The values shown here are the default
+    // values for DAC FIFOs and are provided to show usage.   Their values
+    // must be chosen to work with the DMA channel maximum burst count
+    // value.
     p7142OutParams.dacFifo.fifoAlmostEmptyLevel = 6144;
     p7142OutParams.dacFifo.fifoAlmostFullLevel  = 6176;
 }
@@ -425,12 +415,13 @@ void p71xx::configOutParameters() {
 void p71xx::configDacParameters() {
 
 	/// @todo This will be used just for initialization. The DAC
-	/// NCO will be reprogrammed by p7142Up to match the IF
+	/// NCO will be reprogrammed by p7142Up to match the required IF
 	p7142Dac5686Params.ncoFrequency = 48000000.0;
 
     p7142Dac5686Params.bypassMode = P7142_DAC_FULL_BYPASS_DISABLE;
-    /// Calculate parameters for PLL operation, check for errors.
-    /// Actually, the DAC registers related to this will be programmed
+
+    // Calculate parameters for PLL operation, and check for errors.
+    // Actually, the DAC registers related to this will be reprogrammed
     // by p7142Up.
 	int temp = DAC5687DacPllClkGenSetup(
 			   p7142OutParams.outputRefClkFreq,
@@ -504,17 +495,20 @@ p71xx::start(int chan) {
 
 	std::cout << "DMA interrupt enabled for channel " << chan << std::endl;
 
-	/* start DMA */
+	// Enable the DMA. Transfers will not occur however until the GateFlow
+	// FIFOs start receiveing data, which will take place when the sd3c
+	// timers are started.
 	P7142DmaStart(&(p7142Regs.BAR0RegAddr), chan);
 
+	// Mark this channel as active.
 	_adcActive[chan] = true;
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p71xx::enableGateGen() {
-	/* enable FIFO writes (release Gate from reset) */
+	// enable FIFO writes (release Gate from reset)
+
 	///@todo Temporarily using the GateFlow gating signal to
 	/// enable/disable data flow. This will be changed to
 	/// using the timers for this purpose.
@@ -528,7 +522,8 @@ p71xx::enableGateGen() {
 void
 p71xx::disableGateGen() {
 
-    /* disable FIFO writes (set Gate in reset) */
+    // disable FIFO writes (set Gate in reset)
+
 	///@todo Temoprarily using the GateFlow gating signal to
 	/// enable/disable data flow. This will be changed to
 	/// using the timers for this purpose.

@@ -1,10 +1,3 @@
-/*
- * p7142Up.h
- *
- *  Created on: Oct 12, 2010
- *      Author: burghart
- */
-
 #ifndef P7142UP_H_
 #define P7142UP_H_
 

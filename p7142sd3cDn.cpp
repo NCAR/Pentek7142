@@ -1,9 +1,3 @@
-/*
- * p7142sd3cDn.cpp
- *
- *  Created on: Oct 5, 2010
- *      Author: burghart
- */
 #include "p7142sd3c.h"
 #include "p7142sd3cDn.h"
 #include "BuiltinGaussian.h"
@@ -18,10 +12,18 @@ using namespace boost::posix_time;
 namespace Pentek {
 
 ////////////////////////////////////////////////////////////////////////////////
-p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId, 
-        bool burstSampling, int tsLength, double rx_delay, double rx_pulsewidth,
-        std::string gaussianFile, std::string kaiserFile, double simPauseMS, 
-        int simWaveLength, bool internalClock) :
+p7142sd3cDn::p7142sd3cDn(
+		p7142sd3c * p7142sd3cPtr,
+		int chanId,
+        bool burstSampling,
+        int tsLength,
+        double rx_delay,
+        double rx_pulsewidth,
+        std::string gaussianFile,
+        std::string kaiserFile,
+        double simPauseMS,
+        int simWaveLength,
+        bool internalClock) :
         p7142Dn(p7142sd3cPtr, 
                 chanId, 
                 1, 
@@ -78,18 +80,21 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     /// @todo Estimate the period between data-available interrupts based on the
     /// configured interrupt buffer length. This is a good first-order estimate
     /// of maximum data latency time for the channel.
-    /// TODO: Configure the channel intbufsize for roughly 10 Hz interrupts
+    /// @todo Configure the channel intbufsize for roughly 10 Hz interrupts
     /// (and bufsize to ~2*intbufsize)
     
-    int intbufsize;
+    int interruptBytes;
     if (isSimulating()) {
-        intbufsize =  32768;
+    	interruptBytes =  32768;
     } else {
-        intbufsize = 10000; ///@todo This scheme needs to be revised once we get the windriver DMA working.
+    	interruptBytes = 65536; ///@todo This scheme needs to be revised once we get the windriver DMA working.
     }
-    int interruptBytes = 4 * intbufsize;  // intbufsize is in 4-byte words
-    double chanDataRate = (4 * _gates) / _sd3c.prt();   // @TODO this only works for single PRT
+
+    double chanDataRate = (4 * _gates) / _sd3c.prt();   /// @TODO this only works for single PRT
     _dataInterruptPeriod = interruptBytes / chanDataRate;
+    if (p7142sd3cPtr->nsum() > 1) {
+    	_dataInterruptPeriod /= (p7142sd3cPtr->nsum()/2);
+    }
 
     // Warn if data latency is greater than 1 second, and bail completely if
     // it's greater than 5 seconds.
@@ -99,6 +104,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         std::cerr << "Warning: Estimated max data latency for channel " << 
         _chanId << " is " << _dataInterruptPeriod << " s!" << std::endl;
     }
+
     if (_dataInterruptPeriod > 5.0) {
         abort();
     }
@@ -119,11 +125,6 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     }
     std::cout << "bypass decim: " << bypassDivider() << std::endl;
     
-    // flush the fifos. Note that a flush must not be issued
-    // after the timers have been configured, as this will zero
-    // the timer parameters.
-//    flush();
-
     // configure DDC in FPGA
     if (!config()) {
         std::cout << "error initializing filters\n";
@@ -200,7 +201,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     
     int ddcSelect = _chanId << 14;
 
-    // program kaiser coefficients
+    // program the kaiser coefficients
 
     bool kaiserFailed = false;
     
@@ -293,7 +294,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         std::cout << "Unable to load the Kaiser filter coefficients" << std::endl;
     }
 
-    // program gaussian coefficients
+    // program the gaussian coefficients
     // Note that the DDC select is accomplished in the kaiser filter coefficient
     // address register, which was done during the previous kaiser filter load.
 
@@ -560,46 +561,6 @@ int p7142sd3cDn::filterSetup() {
     }
 
     return 0;
-}
-
-//////////////////////////////////////////////////////////////////////
-void p7142sd3cDn::setInterruptBufSize() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
-
-    // how many bytes are there in each time series?
-    int tsBlockSize;
-    if (_nsum < 2) {
-        tsBlockSize = _tsLength * _gates * 2 * 2;
-    } else {
-        // coherently integrated data has:
-        // 4 tags followed by even IQ pairs followed by odd IQ pairs,
-        // for all gates. Tags, I and Q are 4 byte integers.
-        tsBlockSize = _tsLength * (4 + _gates * 2 * 2) * 4;
-    }
-
-    double tsFreq = _sd3c._prf / _tsLength;
-
-    // we want the interrupt buffer size to be a multiple of tsBlockSize,
-    // but no more than 20 interrupts per second.
-    int intBlocks = 1;
-
-    if (tsFreq <= 20) {
-        intBlocks = 1;
-    } else {
-        intBlocks = (int)(tsFreq / 20) + 1;
-    }
-
-    int bufferSize = tsBlockSize * intBlocks;
-
-    std::cout << "prt is " << _sd3c._prtCounts << "  prt frequency is " << 
-            _sd3c._prf << "  ts freq is " << tsFreq << 
-            "  tsblocks per interrupt is " << intBlocks << std::endl;
-
-    std::cout << "pentek interrupt buffer size is " << bufferSize << std::endl;
-
-    // set the buffer size
-    _sd3c.bufset(_dnFd, bufferSize, 2);
-
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -875,7 +836,6 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
         }
         // read one beam into buf
         r = read(_buf, _beamLength);
-        //std::cout << std::endl << __PRETTY_FUNCTION__ << "read " << r << " bytes" << std::endl;
         assert(r == _beamLength);
 
         // read the next tag word

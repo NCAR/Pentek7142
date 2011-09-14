@@ -62,7 +62,7 @@ libpentek = env.Library('pentek', libsources)
 
 html = env.Apidocs(libsources + headers, DOXYFILE_FILE = "Doxyfile")
 
-#Default(libpentek, html)
+Default(libpentek, html)
 Default(libpentek)
 
 thisdir = env.Dir('.').srcnode().abspath

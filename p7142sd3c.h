@@ -1,10 +1,3 @@
-/*
- * p7172sd3c.h
- *
- *  Created on: Jan 26, 2009
- *      Author: sd3c
- */
-
 #ifndef P7142SD3C_H_
 #define P7142SD3C_H_
 
@@ -74,10 +67,19 @@ public:
     /// @param externalStartTrigger If true, an external trigger source
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar.
-    p7142sd3c(std::string devName, bool simulate, double tx_delay, 
-        double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
-        unsigned int gates, unsigned int nsum, bool freeRun,
-        DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger = false);
+    p7142sd3c(
+    		std::string devName,
+    		bool simulate,
+    		double tx_delay,
+    		double tx_pulsewidth,
+    		double prt,
+    		double prt2,
+    		bool staggeredPrt,
+    		unsigned int gates,
+    		unsigned int nsum,
+    		bool freeRun,
+    		DDCDECIMATETYPE simulateDDCType,
+    		bool externalStartTrigger = false);
     
     /// Destructor.
     virtual ~p7142sd3c();

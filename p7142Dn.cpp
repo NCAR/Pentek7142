@@ -196,7 +196,7 @@ p7142Dn::usingInternalClock() const {
     
     uint32_t clkSel;
 
-    P7142_GET_MSTR_BUS_CTRL_SEL_CLK(_p7142.p7142Regs.BAR2RegAddr.masterAControl, clkSel);
+    P7142_GET_MSTR_BUS_CTRL_SEL_CLK(_p7142._p7142Regs.BAR2RegAddr.masterAControl, clkSel);
     return (clkSel == P7142_MSTR_CTRL_SEL_CLK_EXT_CLK);
 
 }
@@ -208,7 +208,7 @@ p7142Dn::bypassDivider() const {
 	if (isSimulating())
         return(0);
     
-    return (*_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide) + 1;
+    return (*_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide) + 1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -219,9 +219,9 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
     if (isSimulating())
         return true;
     
-    *_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide = (bypassdiv-1);
+    *_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide = (bypassdiv-1);
 
-    if (*_p7142.p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide != (bypassdiv-1)) {
+    if (*_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide != (bypassdiv-1)) {
     	return false;
     }
 

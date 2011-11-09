@@ -40,20 +40,26 @@ p71xx::p71xx(std::string devName, bool simulate):
 _devName(devName),
 _ctrlFd(-1),
 _simulate(simulate),
-_mutex(),
+_p71xxMutex(),
 _isReady(false),
 _dmaBufSize(DMABUFSIZE)
 {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     // If we're simulating, things are simple...
 	if (_simulate) {
 		_isReady = true;
 		return;
 	}
 
-	for (int adchan = 0; adchan < 4; adchan++) {
-		_adcActive[adchan] = false;
+	// Initialize buffers and flags.
+	for (int chan = 0; chan < 4; chan++) {
+		_adcActive[chan] = false;
+		_readBufAvail[chan] = 0;
+		_readBufOut[chan] = 0;
+		_circBufferList[chan].set_capacity(100);
+		_readBuf[chan].resize(2*_dmaBufSize);
 	}
+
 	// initialize ReadyFlow
 	_isReady = initReadyFlow();
 
@@ -62,10 +68,11 @@ _dmaBufSize(DMABUFSIZE)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 p71xx::~p71xx() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     /* cleanup for exit */
-    PTK714X_DeviceClose(hDev);
+    PTK714X_DeviceClose(_deviceHandle);
     PTK714X_LibUninit();
     std::cout << "ReadyFlow closed" << std::endl;
 
@@ -115,8 +122,14 @@ p71xx::read(int chan, char* buf, int bytes) {
 
 	// Wait until there are enough bytes in _fillBuffers[chan]
 	// to satisfy this request.
-	while (_pendingReadIn[chan] < bytes) {
+	while (_readBufAvail[chan] < bytes) {
 		{
+			// move unused data to the front of the buffer
+			for (size_t i = 0; i < _readBufAvail[chan]; i++) {
+				size_t j = _readBufOut[chan] + i;
+				_readBuf[chan][i] = _readBuf[chan][j];
+			}
+			_readBufOut[chan] = 0;
 			// block until we have at least one dma buffer available
 			// in the circular buffer. Note that unique_lock
 			// releases the lock when it goes out of scope.
@@ -125,34 +138,36 @@ p71xx::read(int chan, char* buf, int bytes) {
 				_circBufferCond[chan].wait(lock);
 			}
 			// assert that we will not overrun _fillBuffer
-			assert(_pendingReadIn[chan]+_dmaBufSize <= 2*_dmaBufSize);
+			assert(_readBufAvail[chan]+_dmaBufSize <= 2*_dmaBufSize);
+
 			// At least one buffer is available in the circular buffer,
-			// put it into _fillBuffers.
-			size_t start = _pendingReadIn[chan];
+			// Transfer the data to _readBuf
 			for (size_t i = 0; i < _dmaBufSize; i++) {
-				_pendingReadBuf[chan][start+i] = _circBufferList[chan][0][i];
+				size_t j = _readBufAvail[chan] + i;
+				_readBuf[chan][j] = _circBufferList[chan][0][i];
 			}
+			_readBufAvail[chan] += _dmaBufSize;
+
 			//DUMP_BUF(_buffers[chan][0],  _dmaBufSize);
-			_pendingReadIn[chan] += _dmaBufSize;
+
 			// and remove it from the circular buffer
 			_circBufferList[chan].pop_front();
 		}
 	}
 
-	// copy requested bytes from _fillBuffers[chan] to the user buffer
+	// copy requested bytes from _readBuf[chan] to the user buffer
 	for (size_t i = 0; i < bytes; i++) {
-		buf[i] = _pendingReadBuf[chan][i];
+		size_t j = _readBufOut[chan] + i;
+		buf[i] = _readBuf[chan][j];
 	}
 
-	// move unused data to the front of the buffer
-	for (size_t i = 0; i < _pendingReadIn[chan]-bytes; i++) {
-		_pendingReadBuf[chan][i] = _pendingReadBuf[chan][i+bytes];
-	}
-	_pendingReadIn[chan] -= bytes;
+	_readBufOut[chan]   += bytes;
+	_readBufAvail[chan] -= bytes;
+
 	//DUMP_BUF(buf, bytes);
 
 	// assert that we don't have a math logic error
-	assert(_pendingReadIn[chan] >=0);
+	assert(_readBufAvail[chan] >=0);
 
 	return bytes;
 }
@@ -160,8 +175,8 @@ p71xx::read(int chan, char* buf, int bytes) {
 ////////////////////////////////////////////////////////////////////////////////////////
 bool
 p71xx::initReadyFlow() {
-	slot = -1;
-    hDev = NULL;
+	_pciSlot = -1;
+    _deviceHandle = NULL;
 
     /* initialize the PTK714X library */
     DWORD dwStatus = PTK714X_LibInit();
@@ -172,39 +187,39 @@ p71xx::initReadyFlow() {
     }
 
     /* Find and open a PTK714X device (by default ID) */
-    hDev = PTK714X_DeviceFindAndOpen(&slot, &BAR0Base, &BAR2Base);
-    if (hDev == NULL)
+    _deviceHandle = PTK714X_DeviceFindAndOpen(&_pciSlot, &_BAR0Base, &_BAR2Base);
+    if (_deviceHandle == NULL)
     {
         std::cerr << "Pentek 7142 device not found" << std::endl;
     }
 
     /* Initialize 7142 register address tables */
-    P7142InitRegAddr (BAR0Base, BAR2Base, &p7142Regs);
+    P7142InitRegAddr (_BAR0Base, _BAR2Base, &_p7142Regs);
 
     /* check if module is a 7142 */
-    P7142_GET_MODULE_ID(p7142Regs.BAR2RegAddr.idReadout, moduleId);
-    if (moduleId != P7142_MODULE_ID)
+    P7142_GET_MODULE_ID(_p7142Regs.BAR2RegAddr.idReadout, _moduleId);
+    if (_moduleId != P7142_MODULE_ID)
     {
         std::cerr << "Failed to identify a Pentek 7142 module." << std::endl;
         return false;
     }
 
     std::cout << "Pentek 7142 device";
-    std::cout << std::hex << " BAR0: 0x" << (void *)BAR0Base;
-    std::cout << std::hex << " BAR2: 0x" << (void *)BAR2Base;
+    std::cout << std::hex << " BAR0: 0x" << (void *)_BAR0Base;
+    std::cout << std::hex << " BAR2: 0x" << (void *)_BAR2Base;
     std::cout << std::dec;
     std::cout <<std::endl;
 
     /* Reset board registers to default values */
-    P7142ResetRegs (&p7142Regs);
+    P7142ResetRegs (&_p7142Regs);
 
     /* Load parameter tables with default values */
-    P7142SetPciDefaults    (&p7142PciParams);
-    P7142SetDmaDefaults    (&p7142DmaParams);
-    P7142SetBoardDefaults  (&p7142BoardParams);
-    P7142SetInputDefaults  (&p7142InParams);
-    P7142SetOutputDefaults (&p7142OutParams);
-    P7142SetDac5687Defaults(&p7142Dac5686Params);
+    P7142SetPciDefaults    (&_p7142PciParams);
+    P7142SetDmaDefaults    (&_p7142DmaParams);
+    P7142SetBoardDefaults  (&_p7142BoardParams);
+    P7142SetInputDefaults  (&_p7142InParams);
+    P7142SetOutputDefaults (&_p7142OutParams);
+    P7142SetDac5687Defaults(&_p7142Dac5686Params);
 
     // Apply our adjustments
     configDmaParameters();
@@ -214,12 +229,12 @@ p71xx::initReadyFlow() {
     configDacParameters();
 
     /* Write parameter table values to the 7142 registers */
-    P7142InitPciRegs    (&p7142PciParams,   &(p7142Regs.BAR0RegAddr));
-    P7142InitDmaRegs    (&p7142DmaParams,   &(p7142Regs.BAR0RegAddr));
-    P7142InitBoardRegs  (&p7142BoardParams, &(p7142Regs.BAR2RegAddr));
-    P7142InitInputRegs  (&p7142InParams,    &(p7142Regs.BAR2RegAddr));
-    P7142InitOutputRegs (&p7142OutParams,   &(p7142Regs.BAR2RegAddr));
-    P7142InitDac5687Regs (&p7142OutParams,   &p7142Dac5686Params,   &(p7142Regs.BAR2RegAddr));
+    P7142InitPciRegs    (&_p7142PciParams,   &(_p7142Regs.BAR0RegAddr));
+    P7142InitDmaRegs    (&_p7142DmaParams,   &(_p7142Regs.BAR0RegAddr));
+    P7142InitBoardRegs  (&_p7142BoardParams, &(_p7142Regs.BAR2RegAddr));
+    P7142InitInputRegs  (&_p7142InParams,    &(_p7142Regs.BAR2RegAddr));
+    P7142InitOutputRegs (&_p7142OutParams,   &(_p7142Regs.BAR2RegAddr));
+    P7142InitDac5687Regs (&_p7142OutParams,   &_p7142Dac5686Params,   &(_p7142Regs.BAR2RegAddr));
 
     return true;
 }
@@ -229,33 +244,33 @@ void p71xx::configBoardParameters() {
 
     // Board customization
 
-    p7142BoardParams.busAMaster      = P7142_MSTR_CTRL_MASTER;
-    p7142BoardParams.busATermination = P7142_MSTR_CTRL_TERMINATED;
+    _p7142BoardParams.busAMaster      = P7142_MSTR_CTRL_MASTER;
+    _p7142BoardParams.busATermination = P7142_MSTR_CTRL_TERMINATED;
 
-    p7142BoardParams.busASelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
-    p7142BoardParams.busAClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
+    _p7142BoardParams.busASelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    _p7142BoardParams.busAClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
 
-    p7142BoardParams.busASelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
-    p7142BoardParams.busASyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
+    _p7142BoardParams.busASelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
+    _p7142BoardParams.busASyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
 
-    p7142BoardParams.busASelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
-    p7142BoardParams.busAGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
+    _p7142BoardParams.busASelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
+    _p7142BoardParams.busAGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
 
     /* Bus B parameters */
 
-    p7142BoardParams.busBMaster      = P7142_MSTR_CTRL_MASTER;
-    p7142BoardParams.busBTermination = P7142_MSTR_CTRL_TERMINATED;
+    _p7142BoardParams.busBMaster      = P7142_MSTR_CTRL_MASTER;
+    _p7142BoardParams.busBTermination = P7142_MSTR_CTRL_TERMINATED;
 
-    p7142BoardParams.busBSelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
-    p7142BoardParams.busBClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
+    _p7142BoardParams.busBSelectClock = P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    _p7142BoardParams.busBClockSource = P7142_MSTR_CTRL_CLK_SRC_SEL_CLK;
 
-    p7142BoardParams.busBSelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
-    p7142BoardParams.busBSyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
+    _p7142BoardParams.busBSelectSync  = P7142_MSTR_CTRL_SEL_SYNC_REGISTER;
+    _p7142BoardParams.busBSyncSource  = P7142_MSTR_CTRL_SYNC_SRC_SEL_SYNC;
 
-    p7142BoardParams.busBSelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
-    p7142BoardParams.busBGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
+    _p7142BoardParams.busBSelectGate  = P7142_MSTR_CTRL_SEL_GATE_REGISTER;
+    _p7142BoardParams.busBGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
 
-    p7142BoardParams.endianness = P7142_MISC_CTRL_ENDIANNESS_LE;
+    _p7142BoardParams.endianness = P7142_MISC_CTRL_ENDIANNESS_LE;
 
 }
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -269,7 +284,7 @@ void p71xx::configDmaParameters() {
 	for (int chan = 0; chan < 4; chan++) {
 
 		// open a DMA channel (required before we allocate the buffer)
-		status = PTK714X_DMAOpen(hDev, chan, &dmaHandle[chan]);
+		status = PTK714X_DMAOpen(_deviceHandle, chan, &dmaHandle[chan]);
 		if (status != PTK714X_STATUS_OK) {
 			std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
 			abort();
@@ -283,13 +298,13 @@ void p71xx::configDmaParameters() {
 		}
 
 		/* Abort any existing transfers */
-		P7142DmaAbort(&(p7142Regs.BAR0RegAddr), chan);
+		P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), chan);
 
 		/* Flush DMA channel buffer */
-		P7142DmaFlush(&(p7142Regs.BAR0RegAddr), chan);
+		P7142DmaFlush(&(_p7142Regs.BAR0RegAddr), chan);
 
 		// set up channel parameters */
-		P7142DmaChanSetup(&(p7142DmaParams.dmaChan[chan]),
+		P7142DmaChanSetup(&(_p7142DmaParams.dmaChan[chan]),
 						  PCI7142_DMA_CMD_STAT_DMA_ENABLE,
 						  PCI7142_DMA_CMD_STAT_DEMAND_MODE_ENABLE,
 						  PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
@@ -307,7 +322,7 @@ void p71xx::configDmaParameters() {
 		/// <br> They don't say what "hang up" means.
 		for (int d = 0; d < 4; d++) {
 			P7142DmaDescptrSetup(
-			&(p7142DmaParams.dmaChan[chan]),
+			&(_p7142DmaParams.dmaChan[chan]),
 			d,                                                     /* descriptor number */
 			_dmaBufSize,                                           /* transfer count in bytes */
 			PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
@@ -316,8 +331,8 @@ void p71xx::configDmaParameters() {
 		}
 
 		/* flush FIFO */
-		P7142FlushFifo(&(p7142Regs.BAR2RegAddr.adcFifo[chan]),
-					   &(p7142InParams.adcFifo[chan]));
+		P7142FlushFifo(&(_p7142Regs.BAR2RegAddr.adcFifo[chan]),
+					   &(_p7142InParams.adcFifo[chan]));
 
 		/* Flush the CPU caches */
 		PTK714X_DMASyncCpu(&dmaBuf[chan]);
@@ -329,14 +344,7 @@ void p71xx::configDmaParameters() {
 		_dmaHandlerData[chan].chan  = chan;
 		_dmaHandlerData[chan].p71xx = this;
 
-		// resize the circular buffers
-		_circBufferList[chan].set_capacity(100);
 
-		// allocate enough space in the fill buffers for two dma buffers
-		_pendingReadBuf[chan].resize(2*_dmaBufSize);
-
-		// initialize the end of the data in _fillBuffers
-		_pendingReadIn[chan] = 0;
 	}
 }
 
@@ -344,17 +352,17 @@ void p71xx::configDmaParameters() {
 void p71xx::configInParameters() {
 
     /* Sync Bus select */
-    p7142InParams.inputSyncBusSel = P7142_SYNC_BUS_SEL_A;
+    _p7142InParams.inputSyncBusSel = P7142_SYNC_BUS_SEL_A;
 
 	///@todo Currently using the GateFlow gating signal to
 	/// enable/disable data flow. Not sure that this is necessary
     /// or even having any effect..
 
     //set the gate generator register pointers */
-    if (p7142InParams.inputSyncBusSel == P7142_SYNC_BUS_SEL_A)
-        gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateAGen);
+    if (_p7142InParams.inputSyncBusSel == P7142_SYNC_BUS_SEL_A)
+        gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateAGen);
     else
-        gateGenReg = (volatile unsigned int *)(p7142Regs.BAR2RegAddr.gateBGen);
+        gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateBGen);
 
     // disable FIFO writes (set Gate in reset)
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
@@ -365,7 +373,7 @@ void p71xx::configInParameters() {
     	// select data packing mode.  It can be unpacked or time-packed.
 		// The program define is located at the top of the program.
 		//
-		p7142InParams.adcFifo[adchan].fifoPackMode = P7142_FIFO_ADC_PACK_MODE_TIME_PACK;
+		_p7142InParams.adcFifo[adchan].fifoPackMode = P7142_FIFO_ADC_PACK_MODE_TIME_PACK;
 
 		// set the FIFO decimation.  This allows the input data rate to the
 		// FIFO to be reduced.  It can be a value from 0 to 0xFFF.  Actual
@@ -373,15 +381,15 @@ void p71xx::configInParameters() {
 
 		// set to decimation by 1 here, but will almost always be modified by the user
 		// to an appropriate value.
-		p7142InParams.adcFifoDecimation[adchan] = 0;
+		_p7142InParams.adcFifoDecimation[adchan] = 0;
 
 		// The FIFO Almost Full and Almost Empty levels are set to default
 		// values for all programs.  The values shown here are the default
 		// values and and are provided to show usage.  Their values must be
 		// chosen to work with the DMA channel maximum burst count value.
 		//
-		p7142InParams.adcFifo[adchan].fifoAlmostEmptyLevel = 512;
-		p7142InParams.adcFifo[adchan].fifoAlmostFullLevel  = 544;
+		_p7142InParams.adcFifo[adchan].fifoAlmostEmptyLevel = 512;
+		_p7142InParams.adcFifo[adchan].fifoAlmostFullLevel  = 544;
     }
 
 
@@ -392,23 +400,23 @@ void p71xx::configOutParameters() {
 
     // Customize the up conversion path
 
-    p7142OutParams.dacPllVdd = P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE;
+    _p7142OutParams.dacPllVdd = P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE;
     /// @todo Is the following correct for PLL usage? What do they mean by "bypass"?
-    p7142OutParams.dacClkSel = P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS;
-    p7142OutParams.outputSyncBusSel = P7142_SYNC_BUS_SEL_A;
-    p7142OutParams.outputRefClkFreq = 48.0e6; /// @todo need to get the correct freq. brought into here.
-    p7142OutParams.dacFifo.fifoPackMode = P7142_FIFO_DAC_PACK_MODE_16BIT_PACK;
+    _p7142OutParams.dacClkSel = P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS;
+    _p7142OutParams.outputSyncBusSel = P7142_SYNC_BUS_SEL_A;
+    _p7142OutParams.outputRefClkFreq = 48.0e6; /// @todo need to get the correct freq. brought into here.
+    _p7142OutParams.dacFifo.fifoPackMode = P7142_FIFO_DAC_PACK_MODE_16BIT_PACK;
 
     // enable or disable word swap
-    p7142OutParams.dacFifo.fifoWordSwap = P7142_FIFO_CTRL_WORD_SWAP_DISABLE;
+    _p7142OutParams.dacFifo.fifoWordSwap = P7142_FIFO_CTRL_WORD_SWAP_DISABLE;
 
     // The FIFO Almost Full and Almost Empty levels are set to default
     // values for all programs.  The values shown here are the default
     // values for DAC FIFOs and are provided to show usage.   Their values
     // must be chosen to work with the DMA channel maximum burst count
     // value.
-    p7142OutParams.dacFifo.fifoAlmostEmptyLevel = 6144;
-    p7142OutParams.dacFifo.fifoAlmostFullLevel  = 6176;
+    _p7142OutParams.dacFifo.fifoAlmostEmptyLevel = 6144;
+    _p7142OutParams.dacFifo.fifoAlmostFullLevel  = 6176;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -416,20 +424,20 @@ void p71xx::configDacParameters() {
 
 	/// @todo This will be used just for initialization. The DAC
 	/// NCO will be reprogrammed by p7142Up to match the required IF
-	p7142Dac5686Params.ncoFrequency = 48000000.0;
+	_p7142Dac5686Params.ncoFrequency = 48000000.0;
 
-    p7142Dac5686Params.bypassMode = P7142_DAC_FULL_BYPASS_DISABLE;
+    _p7142Dac5686Params.bypassMode = P7142_DAC_FULL_BYPASS_DISABLE;
 
     // Calculate parameters for PLL operation, and check for errors.
     // Actually, the DAC registers related to this will be reprogrammed
     // by p7142Up.
 	int temp = DAC5687DacPllClkGenSetup(
-			   p7142OutParams.outputRefClkFreq,
-			   p7142Dac5686Params.ncoFrequency,
-			   &(p7142Dac5686Params.pllDividerRatio),
-			   &(p7142Dac5686Params.pllFreq),
-			   &(p7142Dac5686Params.pllKv),
-			   &(p7142Dac5686Params.filterSelect));
+			   _p7142OutParams.outputRefClkFreq,
+			   _p7142Dac5686Params.ncoFrequency,
+			   &(_p7142Dac5686Params.pllDividerRatio),
+			   &(_p7142Dac5686Params.pllFreq),
+			   &(_p7142Dac5686Params.pllKv),
+			   &(_p7142Dac5686Params.filterSelect));
 	if (temp) {
 		std::cerr
 		<< __FILE__
@@ -438,11 +446,11 @@ void p71xx::configDacParameters() {
 				<< std::endl;
 	}
 
-    p7142Dac5686Params.dacACourseGain = 0xf;
-    p7142Dac5686Params.dacAFineGain   = 0x00;
-    p7142Dac5686Params.dacBCourseGain = 0xf;
-    p7142Dac5686Params.dacBFineGain   = 0x00;
-    p7142Dac5686Params.inputMode      = DAC5687_CFG1_DATA_IN_TWOS_COMPLIMENT;
+    _p7142Dac5686Params.dacACourseGain = 0xf;
+    _p7142Dac5686Params.dacAFineGain   = 0x00;
+    _p7142Dac5686Params.dacBCourseGain = 0xf;
+    _p7142Dac5686Params.dacBFineGain   = 0x00;
+    _p7142Dac5686Params.inputMode      = DAC5687_CFG1_DATA_IN_TWOS_COMPLIMENT;
 
 }
 
@@ -471,13 +479,13 @@ p71xx::start(int chan) {
 
 
 	// apply the parameters to the DMA registers for this DMA channel
-	P7142DmaChanInit(&(p7142DmaParams.dmaChan[chan]),
-					 &(p7142Regs.BAR0RegAddr),
+	P7142DmaChanInit(&(_p7142DmaParams.dmaChan[chan]),
+					 &(_p7142Regs.BAR0RegAddr),
 					 chan);
 
 	// enable the FIFO
 	P7142_SET_FIFO_CTRL_FIFO_ENABLE(
-		p7142Regs.BAR2RegAddr.adcFifo[chan].FifoCtrl,
+		_p7142Regs.BAR2RegAddr.adcFifo[chan].FifoCtrl,
 		P7142_FIFO_ENABLE);
 
 	// enable the DMA interrupt, on descriptor finish.
@@ -498,7 +506,7 @@ p71xx::start(int chan) {
 	// Enable the DMA. Transfers will not occur however until the GateFlow
 	// FIFOs start receiveing data, which will take place when the sd3c
 	// timers are started.
-	P7142DmaStart(&(p7142Regs.BAR0RegAddr), chan);
+	P7142DmaStart(&(_p7142Regs.BAR0RegAddr), chan);
 
 	// Mark this channel as active.
 	_adcActive[chan] = true;
@@ -557,7 +565,7 @@ p71xx::stop(int chan) {
 	int status;
 
 	/* Abort any existing transfers */
-    P7142DmaAbort(&(p7142Regs.BAR0RegAddr), chan);
+    P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), chan);
 
 	/* Disable DMA Interrupt for this channel */
    status = PTK714X_DMAIntDisable(dmaHandle[chan]);
@@ -572,7 +580,7 @@ p71xx::stop(int chan) {
 		   ": DMA memory free failed" << std::endl;
 	}
 
-	status = PTK714X_DMAClose(hDev, dmaHandle[chan]);
+	status = PTK714X_DMAClose(_deviceHandle, dmaHandle[chan]);
 	if (status != PTK714X_STATUS_OK) {
 		std::cerr << __FILE__ << ":" << __FUNCTION__ <<
 				": DMA channel close failed" << std::endl;

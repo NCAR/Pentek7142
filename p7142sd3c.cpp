@@ -30,7 +30,7 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
         _nsum(nsum),
         _simulateDDCType(simulateDDCType),
         _externalStartTrigger(externalStartTrigger) {
-	boost::recursive_mutex::scoped_lock guard(_mutex);
+	boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     // sanity check
     if (_nsum < 1) {
@@ -84,13 +84,13 @@ p7142sd3c::p7142sd3c(std::string devName, bool simulate, double tx_delay,
     if (! isSimulating()) {
     	uint32_t temp;
 
-    	P7142_REG_WRITE(BAR2Base + RADAR_GATES, gates);
+    	P7142_REG_WRITE(_BAR2Base + RADAR_GATES, gates);
         usleep(p7142::P7142_IOCTLSLEEPUS);
-    	P7142_REG_READ (BAR2Base + RADAR_GATES, temp);
+    	P7142_REG_READ (_BAR2Base + RADAR_GATES, temp);
     	std::cout << "gate readback is " << temp <<std::endl;
-    	P7142_REG_WRITE(BAR2Base + CI_NSUM, nsum);
+    	P7142_REG_WRITE(_BAR2Base + CI_NSUM, nsum);
         usleep(p7142::P7142_IOCTLSLEEPUS);
-    	P7142_REG_READ (BAR2Base + CI_NSUM, temp);
+    	P7142_REG_READ (_BAR2Base + CI_NSUM, temp);
     	std::cout << "nsum readback is " << temp << std::endl;
     }
 
@@ -155,7 +155,7 @@ p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
         double rx_delay, double rx_pulse_width, std::string gaussianFile, 
         std::string kaiserFile, double simPauseMs, int simWavelength,
         bool internalClock) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     // Create a new p7142sd3cDn downconverter and put it in our list
     p7142sd3cDn* downconverter = new p7142sd3cDn(
@@ -182,7 +182,7 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
 
     _TimerConfig currentVals = _timerConfigs[ndx];
 
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     // If current timer width is non-zero, warn about any changes in 
     // width or delay.
@@ -205,7 +205,7 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142sd3c::timeToCounts(double time) const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     return(lround(time * _adc_clock / 2));
 }
@@ -213,14 +213,14 @@ p7142sd3c::timeToCounts(double time) const {
 //////////////////////////////////////////////////////////////////////////////////
 double
 p7142sd3c::countsToTime(int counts) const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     return((2 * counts) / _adc_clock);
 }
 
 /////////////////////////////////////////////////////////////////////////
 void p7142sd3c::timersStartStop(bool start) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate) {
         setXmitStartTime(microsec_clock::universal_time());
@@ -233,19 +233,19 @@ void p7142sd3c::timersStartStop(bool start) {
     }
         
     // Turn on Write Strobes
-    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
+    P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // configure each timer
     for (int i = 0; i < 8; i++) {
 	    // Control Register
-    	P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
+    	P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
         usleep(p7142::P7142_IOCTLSLEEPUS);
 	
 	    // Enable/Disable Timer
         unsigned int value =
         		(start ? TIMER_ON : 0) | (timerInvert(i) ? TIMER_NEG : 0);
-        P7142_REG_WRITE(BAR2Base + MT_DATA, value);
+        P7142_REG_WRITE(_BAR2Base + MT_DATA, value);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
@@ -274,36 +274,36 @@ void p7142sd3c::timersStartStop(bool start) {
             usleep(sleep_uSec);
             // Set the wait-for-trigger bit so timers start at the next
             // trigger.
-            P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
+            P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
             usleep(p7142::P7142_IOCTLSLEEPUS);
         } else {
             // Internal trigger: timers start immediately.
             setXmitStartTime(now);
-            P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
+            P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
             usleep(p7142::P7142_IOCTLSLEEPUS);
         }
         
         std::cout << "Timers/radar start time " << _xmitStartTime << std::endl;
     } else {
-    	P7142_REG_WRITE(BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS);
+    	P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS);
         usleep(p7142::P7142_IOCTLSLEEPUS);
         std::cout << "Timers stopped at " << now << std::endl;
     }
     
     // Turn off Write Strobes
-    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
+    P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_OFF);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 }
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::startFilters() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (isSimulating())
         return;
 
     // Start the DDC
-    P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_START);
+    P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_START);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     std::cout << "filters enabled" << std::endl;
@@ -311,53 +311,53 @@ void p7142sd3c::startFilters() {
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::stopFilters() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (isSimulating())
         return;
 
     uint32_t temp;
     // stop the filters if they are running.
-    P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
-    P7142_REG_WRITE(BAR2Base + KAISER_ADDR, DDC_STOP);
+    P7142_REG_READ (_BAR2Base + KAISER_ADDR, temp);
+    P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_STOP);
     usleep(p7142::P7142_IOCTLSLEEPUS);
-    P7142_REG_READ (BAR2Base + KAISER_ADDR, temp);
+    P7142_REG_READ (_BAR2Base + KAISER_ADDR, temp);
 }
 
 //////////////////////////////////////////////////////////////////////
 unsigned short int p7142sd3c::TTLIn() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return 0;
 
     uint32_t val;
-    P7142_REG_READ(BAR2Base + TTL_IN, val);
+    P7142_REG_READ(_BAR2Base + TTL_IN, val);
 
     return val;
 }
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::TTLOut(unsigned short int data) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return;
 
-    P7142_REG_WRITE(BAR2Base + TTL_OUT1, data);
+    P7142_REG_WRITE(_BAR2Base + TTL_OUT1, data);
 
 }
 
 //////////////////////////////////////////////////////////////////////
 unsigned int p7142sd3c::sd3cTypeAndRev() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return 1;
 
     uint32_t retval;
 
-    P7142_REG_READ(BAR2Base + FPGA_REPO_REV, retval);
+    P7142_REG_READ(_BAR2Base + FPGA_REPO_REV, retval);
 
     return retval;
 
@@ -365,7 +365,7 @@ unsigned int p7142sd3c::sd3cTypeAndRev() {
 
 //////////////////////////////////////////////////////////////////////
 int p7142sd3c::sd3cRev() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return _simulateDDCType;
@@ -382,7 +382,7 @@ int p7142sd3c::sd3cRev() {
 
 //////////////////////////////////////////////////////////////////////
 p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return _simulateDDCType;
@@ -416,23 +416,23 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
 //////////////////////////////////////////////////////////////////////
 void
 p7142sd3c::loadFreeRun() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (isSimulating())
         return;
 
     // get the transceiver control register
     uint32_t tcreg;
-    P7142_REG_READ(BAR2Base + TRANS_CNTRL, tcreg);
+    P7142_REG_READ(_BAR2Base + TRANS_CNTRL, tcreg);
 
     // set the free run bit as specified by _freerun
     if (_freeRun) {
         // set free run
-    	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg | TRANS_FREE_RUN);
+    	P7142_REG_WRITE(_BAR2Base + TRANS_CNTRL, tcreg | TRANS_FREE_RUN);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     } else {
         // clear free run
-    	P7142_REG_WRITE(BAR2Base + TRANS_CNTRL, tcreg & ~TRANS_FREE_RUN);
+    	P7142_REG_WRITE(_BAR2Base + TRANS_CNTRL, tcreg & ~TRANS_FREE_RUN);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
@@ -441,7 +441,7 @@ p7142sd3c::loadFreeRun() {
 /////////////////////////////////////////////////////////////////////////
 bool
 p7142sd3c::initTimers() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_simulate)
         return true;
@@ -481,15 +481,15 @@ p7142sd3c::initTimers() {
     std::cout << "periodCount is " << periodCount << std::endl;
 
     // Control Register
-    P7142_REG_WRITE(BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
+    P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Enable Timer
-    P7142_REG_WRITE(BAR2Base + MT_DATA, TIMER_ON);
+    P7142_REG_WRITE(_BAR2Base + MT_DATA, TIMER_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Turn on Write Strobes
-    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_ON);
+    P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
     
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
@@ -500,18 +500,18 @@ p7142sd3c::initTimers() {
         
         // Delay Register
         // Address
-        P7142_REG_WRITE(BAR2Base + MT_ADDR, DELAY_REG | SD3C_TIMER_BITS[i]);
+        P7142_REG_WRITE(_BAR2Base + MT_ADDR, DELAY_REG | SD3C_TIMER_BITS[i]);
         usleep(p7142::P7142_IOCTLSLEEPUS);
         // Data
-        P7142_REG_WRITE(BAR2Base + MT_DATA, timerDelay(i));
+        P7142_REG_WRITE(_BAR2Base + MT_DATA, timerDelay(i));
         usleep(p7142::P7142_IOCTLSLEEPUS);
 
         // Pulse Width Register
         // Address
-        P7142_REG_WRITE(BAR2Base + MT_ADDR, WIDTH_REG | SD3C_TIMER_BITS[i]);
+        P7142_REG_WRITE(_BAR2Base + MT_ADDR, WIDTH_REG | SD3C_TIMER_BITS[i]);
         usleep(p7142::P7142_IOCTLSLEEPUS);
         // Data
-        P7142_REG_WRITE(BAR2Base + MT_DATA, timerWidth(i));
+        P7142_REG_WRITE(_BAR2Base + MT_DATA, timerWidth(i));
         usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
@@ -519,22 +519,22 @@ p7142sd3c::initTimers() {
 
     // Period Register
     // Address
-    P7142_REG_WRITE(BAR2Base + MT_ADDR, PERIOD_REG | ALL_SD3C_TIMER_BITS);
+    P7142_REG_WRITE(_BAR2Base + MT_ADDR, PERIOD_REG | ALL_SD3C_TIMER_BITS);
     usleep(p7142::P7142_IOCTLSLEEPUS);
     // Data
-    P7142_REG_WRITE(BAR2Base + MT_DATA, periodCount);
+    P7142_REG_WRITE(_BAR2Base + MT_DATA, periodCount);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     //Multiple PRT Register
     // Address
-    P7142_REG_WRITE(BAR2Base + MT_ADDR, PRT_REG | ALL_SD3C_TIMER_BITS);
+    P7142_REG_WRITE(_BAR2Base + MT_ADDR, PRT_REG | ALL_SD3C_TIMER_BITS);
     usleep(p7142::P7142_IOCTLSLEEPUS);
     // Data: Mult PRT Valu Timer 0
-    P7142_REG_WRITE(BAR2Base + MT_DATA, PrtScheme);
+    P7142_REG_WRITE(_BAR2Base + MT_DATA, PrtScheme);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Turn off Write Strobes
-    P7142_REG_WRITE(BAR2Base + MT_WR, WRITE_OFF);
+    P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_OFF);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     return true;
@@ -543,7 +543,7 @@ p7142sd3c::initTimers() {
 
 //////////////////////////////////////////////////////////////////////
 int p7142sd3c::dataRate() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     int rate = 0;
 
@@ -576,7 +576,7 @@ int p7142sd3c::dataRate() {
 
 //////////////////////////////////////////////////////////////////////
 ptime p7142sd3c::timeOfPulse(int64_t nPulsesSinceStart) const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     // Figure out offset since transmitter start based on the pulse
     // number and PRT(s).
@@ -608,7 +608,7 @@ ptime p7142sd3c::timeOfPulse(int64_t nPulsesSinceStart) const {
 
 //////////////////////////////////////////////////////////////////////
 int64_t p7142sd3c::pulseAtTime(ptime time) const {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     
     // First get the time since transmit start, in seconds
     double timeSinceStart = 1.0e-6 * (time - _xmitStartTime).total_microseconds();

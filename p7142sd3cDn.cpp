@@ -227,7 +227,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             break;    
         }
         
-        P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_ADDR,
+        P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_ADDR,
                 ddcSelect | DDC_STOP | ramSelect | ramAddr);
         usleep(1);
 
@@ -237,21 +237,21 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         for (int attempt = 0; attempt < 5; attempt++) {
             // write the value
             // LS word first
-            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
             usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
-            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_DATA_MSW,
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_DATA_MSW,
                     (kaiser[i] >> 16) & 0x3);
             usleep(1);
     
             // latch coefficient
-            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x1);
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_WR, 0x1);
             usleep(1);
     
             // disable writing (kaiser readback only succeeds if we do this)
-            P7142_REG_WRITE(_sd3c.BAR2Base + KAISER_WR, 0x0);
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_WR, 0x0);
             usleep(1);
     
             // read back the programmed value; we need to do this in two words 
@@ -259,8 +259,8 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             unsigned int readBack;
             uint32_t kaiser_lsw;
             uint32_t kaiser_msw;
-            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_LSW, kaiser_lsw);
-            P7142_REG_READ(_sd3c.BAR2Base + KAISER_READ_MSW, kaiser_msw);
+            P7142_REG_READ(_sd3c._BAR2Base + KAISER_READ_LSW, kaiser_lsw);
+            P7142_REG_READ(_sd3c._BAR2Base + KAISER_READ_MSW, kaiser_msw);
             readBack = kaiser_msw << 16 | kaiser_lsw;
 
             if (readBack == kaiser[i]) {
@@ -331,28 +331,28 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         bool coeffLoaded = false;
         for (int attempt = 0; attempt < 5; attempt++) {
             // set the address
-            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_ADDR,
+            P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_ADDR,
                     ddcSelect | ramSelect | ramAddr);
             usleep(1);
     
             // write the value
             // LS word first
-            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_LSW,
+            P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_DATA_LSW,
                     gaussian[i] & 0xFFFF);
             usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
-            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_DATA_MSW,
+            P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_DATA_MSW,
                     (gaussian[i] >> 16) & 0x3);
             usleep(1);
     
             // latch coefficient
-            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x1);
+            P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_WR, 0x1);
             usleep(1);
     
             // disable writing (gaussian readback only succeeds if we do this)
-            P7142_REG_WRITE(_sd3c.BAR2Base + GAUSSIAN_WR, 0x0);
+            P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_WR, 0x0);
             usleep(1);
     
             // read back the programmed value; we need to do this in two words 
@@ -360,8 +360,8 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             unsigned int readBack;
             uint32_t kaiser_lsw;
             uint32_t kaiser_msw;
-            P7142_REG_READ(_sd3c.BAR2Base + GAUSSIAN_READ_LSW, kaiser_lsw);
-            P7142_REG_READ(_sd3c.BAR2Base + GAUSSIAN_READ_MSW, kaiser_msw);
+            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_LSW, kaiser_lsw);
+            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_MSW, kaiser_msw);
             readBack = kaiser_msw << 16 | kaiser_lsw;
             if (readBack == gaussian[i]) {
                 coeffLoaded = true;
@@ -591,10 +591,10 @@ void p7142sd3cDn::fifoConfig() {
         break;
     }
 
-    P7142_REG_READ(_sd3c.BAR2Base + ppOffset, readBack);
+    P7142_REG_READ(_sd3c._BAR2Base + ppOffset, readBack);
 
     // And configure ADC FIFO Control for this channel
-    P7142_REG_WRITE(_sd3c.BAR2Base + ppOffset, readBack & 0x000034BF);
+    P7142_REG_WRITE(_sd3c._BAR2Base + ppOffset, readBack & 0x000034BF);
 
 }
 

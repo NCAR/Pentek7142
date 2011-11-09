@@ -179,7 +179,7 @@ p7142Up::getDACreg(int reg) {
     if (isSimulating())
         return 0;
 
-    char val = (char)P7142Dac5686ReadReg (&_p7142ptr.p7142Regs.BAR2RegAddr, reg);
+    char val = (char)P7142Dac5686ReadReg (&_p7142ptr._p7142Regs.BAR2RegAddr, reg);
 
     return val;
 
@@ -205,7 +205,7 @@ p7142Up::setDACreg(int reg, char val) {
     if (isSimulating())
         return;
 
-    P7142Dac5686WriteReg (&_p7142ptr.p7142Regs.BAR2RegAddr, reg, val);
+    P7142Dac5686WriteReg (&_p7142ptr._p7142Regs.BAR2RegAddr, reg, val);
 
     ///////// Original code follows, from the Pentek Linux Driver days /////////
     //ARG_PEEKPOKE pp;
@@ -232,17 +232,17 @@ p7142Up::write(int32_t* data, int n) {
     _mem2depth = n;
 
     P7142_SET_DDR_MEM_DEPTH(
-    		_p7142ptr.p7142Regs.BAR2RegAddr.ddrMem.ddrMemBankDepth[2].Lsb,
+    		_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemBankDepth[2].Lsb,
     		_mem2depth);
 
     // Transfer data to memory 2
     int writeStatus = _p7142ptr.ddrMemWrite(
-    		&_p7142ptr.p7142Regs,
+    		&_p7142ptr._p7142Regs,
     		P7142_DDR_MEM_BANK2,
             0,
             n*4,
             data,
-            _p7142ptr.hDev);
+            _p7142ptr._deviceHandle);
 
     if (writeStatus) {
     	std::cerr << "DMA write to memory bank 2 failed, with status code: " << writeStatus << std::endl;
@@ -290,24 +290,24 @@ p7142Up::startDAC() {
     // bits D06 and D10 in the DDR memory control.
     // Resetting D06 has the side effect of zeroing the memory counter.
     P7142_SET_DDR_MEM_MODE(
-    		_p7142ptr.p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
+    		_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
      		P7142_DDR_MEM_BANK_2_DAC_OUTPUT_MODE);
 
      // Enable the DAC memory FIFO. This sets the FIFO enable bit D0
      P7142_SET_FIFO_CTRL_FIFO_ENABLE(
-    		_p7142ptr.p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+    		_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
     		P7142_FIFO_ENABLE);
 
      // Place the DAC memory FIFO into reset by setting bit D1.
      P7142_SET_FIFO_CTRL_RESET(
-    		 _p7142ptr.p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+    		 _p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
     		 P7142_FIFO_RESET_HOLD);
 
      // Place the DAC memory FIFO in run mode by clearing bit D1. The FIFO
      // will be clocked when the tx_gate allows the memory counter
      // to run.
      P7142_SET_FIFO_CTRL_RESET(
-    		 _p7142ptr.p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+    		 _p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
     		 P7142_FIFO_RESET_RELEASE);
 
     ///////// Original code follows, from the Pentek Linux Driver days /////////
@@ -373,7 +373,7 @@ p7142Up::stopDAC() {
 
   // Turn off data routing from mem2
   P7142_SET_DDR_MEM_MODE(
-  		_p7142ptr.p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
+  		_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
   		P7142_DDR_MEM_DISABLE_MODE);
 
   // disable the NCO in order to stop the DAC

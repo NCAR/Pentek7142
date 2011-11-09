@@ -47,7 +47,7 @@ p7142::p7142(std::string devName, bool simulate):
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142::~p7142() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     for (int i = 0; i < P7142_NCHANNELS; i++) {
         delete _downconverters[i];
     }
@@ -57,7 +57,7 @@ p7142::~p7142() {
 p7142Dn*
 p7142::addDownconverter(int chanId, int bypassdivrate,
         int simWavelength, bool sim4bytes) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     // Just construct a new downconverter and put it in our list.
     p7142Dn* downconverter = new p7142Dn(
     		this,
@@ -75,7 +75,7 @@ p7142::addUpconverter(
 		double sampleClockHz,
         double ncoFreqHz,
         char mode) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     // Just construct a new upconverter and put it in our list.
     p7142Up* upconverter = new p7142Up(
     		this,
@@ -89,7 +89,7 @@ p7142::addUpconverter(
 ////////////////////////////////////////////////////////////////////////////////
 void
 p7142::addDownconverter(p7142Dn * downconverter) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     
     int chanId = downconverter->chanId();
     if (_downconverters[chanId]) {
@@ -103,7 +103,7 @@ p7142::addDownconverter(p7142Dn * downconverter) {
 ////////////////////////////////////////////////////////////////////////////////
 void
 p7142::_addUpconverter(p7142Up * upconverter) {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_upconverter) {
         std::cerr << "Existing upconverter is being replaced on device " << 
@@ -116,17 +116,17 @@ p7142::_addUpconverter(p7142Up * upconverter) {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p7142::resetDCM() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (isSimulating())
         return;
 
     // cycle the digital clock manager
     // hold the dcm in reset for a short period
-    P7142_SET_DCM_CTRL_DCM_RST(p7142Regs.BAR2RegAddr.dcmControl, P7142_DCM_CTRL_DCM_RST_RESET);
+    P7142_SET_DCM_CTRL_DCM_RST(_p7142Regs.BAR2RegAddr.dcmControl, P7142_DCM_CTRL_DCM_RST_RESET);
     usleep(1000);
     // take the dcm out of reset
-    P7142_SET_DCM_CTRL_DCM_RST(p7142Regs.BAR2RegAddr.dcmControl, P7142_DCM_CTRL_DCM_RST_RUN);
+    P7142_SET_DCM_CTRL_DCM_RST(_p7142Regs.BAR2RegAddr.dcmControl, P7142_DCM_CTRL_DCM_RST_RUN);
     usleep(1000);
 
     std::cout << "DCM has been cycled." << std::endl;

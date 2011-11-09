@@ -94,11 +94,11 @@ struct DmaHandlerData {
 	/// @li A circular list of buffers for intermediate storage
 	/// @li A pending read buffer, used to accumulate bytes to satisfy read requests.
 	///
-	/// @li Each DMA interrupt causes dmaIntHandler() to be entered
+	/// @li Each DMA interrupt causes dmaIntHandler() to be entered.
 	/// @li dmaIntHandler() calls p71xx::dmaInterrupt(), which transfers
-	/// the dma buffer data to the circular buffer list.
-	/// @li p71xx::read() will attempt to copy bytes from the circular
-	/// buffers to the pending read buffer. If the pending read buffer
+	/// the data from the dma buffer to a buffer in the circular buffer list.
+	/// @li p71xx::read() will attempt to copy bytes from the buffers on the circular
+	/// buffer list to the pending read buffer. If the pending read buffer
 	/// has enough bytes to satisfy the the request, they will be transferred to
 	/// the caller buffer and the read will return.
 	/// @li Otherwise, p71xx::read() will block until another buffer is
@@ -109,8 +109,8 @@ struct DmaHandlerData {
 	/// the DMA interrupts will even be delivered in times of heavy load).
 	///
 	/// The pending read buffer is not strictly necessary. read() requests
-	/// could be filled incrementaly out of the circular buffers. But the pending
-	/// read buffer makes the booing keeping much easier, and the logic simpler.
+	/// could be filled incrementally out of the circular buffers. But the pending
+	/// read buffer makes the book keeping much easier, and the logic simpler.
 	/// If performance appears to be an issue, this could be one area to look at
 	/// for a redesign.
 	///
@@ -220,42 +220,42 @@ struct DmaHandlerData {
             int read(int chan, char* buf, int bytes);
 
             /// ReadyFlow device descriptor.
-            void* hDev;
+            void* _deviceHandle;
             /// ReadyFlow dma handles, one per channel
             PTK714X_DMA_HANDLE*   dmaHandle[4];
             /// ReadyFlow dma buffer address pointers, in user space
             PTK714X_DMA_BUFFER    dmaBuf[4];
-            /// ReadyFlow user data. A pinoter to these will be passed into
+            /// ReadyFlow user data. A pointer to these will be passed into
             /// dmaIntHandler().
             DmaHandlerData        _dmaHandlerData[4];
             /// ReadyFlow PCI BAR0 base address.
-            DWORD                 BAR0Base;
+            DWORD                 _BAR0Base;
             /// ReadyFlow PCI BAR2 base address.
-            DWORD                 BAR2Base;
+            DWORD                 _BAR2Base;
             /// ReadyFlow PCI slot number.
-            DWORD                 slot;
+            DWORD                 _pciSlot;
             /// ReadyFlow module identifier.
-            unsigned int          moduleId;
+            unsigned int          _moduleId;
             /// ReadyFlow 7142 register addresses in PCI space.
-            P7142_REG_ADDR        p7142Regs;
+            P7142_REG_ADDR        _p7142Regs;
             /// ReadyFlow parameters for PCI configuration.
-            P7142_PCI_PARAMS      p7142PciParams;
+            P7142_PCI_PARAMS      _p7142PciParams;
             /// ReadyFlow parameters for DMA configuration.
-            P7142_DMA_PARAMS      p7142DmaParams;
+            P7142_DMA_PARAMS      _p7142DmaParams;
             /// ReadyFlow parameters for overall board configuration.
-            P7142_BOARD_PARAMS    p7142BoardParams;
+            P7142_BOARD_PARAMS    _p7142BoardParams;
             /// ReadyFlow parameters for the down conversion path configuration.
-            P7142_INPUT_PARAMS    p7142InParams;
+            P7142_INPUT_PARAMS    _p7142InParams;
             /// ReadyFlow parameters for the up conversion path configuration.
-            P7142_OUTPUT_PARAMS   p7142OutParams;
+            P7142_OUTPUT_PARAMS   _p7142OutParams;
             /// ReadyFlow parameters for DAC configuration.
-            P7142_DAC5686_PARAMS  p7142Dac5686Params;
+            P7142_DAC5686_PARAMS  _p7142Dac5686Params;
 
             /// The PCI address of the GateFlow gte generation control
             /// register. It is not clear that we need to even use this.
             volatile unsigned int *gateGenReg;
 
-            int* adcData;
+            //int* adcData;
             /// The root device name
             std::string _devName;
             /// The ctrl device name
@@ -265,7 +265,7 @@ struct DmaHandlerData {
             /// set true if in simulation mode
             bool _simulate;
             /// recursive mutex which provides us thread safety.
-            mutable boost::recursive_mutex _mutex;
+            mutable boost::recursive_mutex _p71xxMutex;
             /// True if device is opened and accessible
             bool _isReady;
             /// true if an AD channel is running
@@ -285,11 +285,13 @@ struct DmaHandlerData {
             /// resizing, we allocate it to it's full length (2*_dmaBufSize).
             /// Bytes are added to the end of this buffer, and sucked out of
             /// the beginning to satisfy read requests.,
-            /// _pendingReadIn tracks how full the buffer currently is.
-            std::vector<char> _pendingReadBuf[4];
-            /// The number of bytes currently contained in _pendingReadBuf.
-            /// One per channel.
-            unsigned int _pendingReadIn[4];
+            /// _readBufAvail tracks how many bytes are available in the buffer.
+            /// _readBufOut is the index of the next byte available in the buffer.
+            std::vector<char> _readBuf[4];
+            /// The number of bytes available in the _readBuf.
+            unsigned int _readBufAvail[4];
+            /// The next avaiable byte in _readBuf.
+            unsigned int _readBufOut[4];
             /// The number bytes to be transferred in each DMA transaction. Note
             /// that each Pentek channel can make use of up to four DMA buffers,
             /// filling them in a round-robin fashion.

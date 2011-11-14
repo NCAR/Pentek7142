@@ -15,8 +15,6 @@ for (unsigned int i_ = 0; i_ < (unsigned int)bytes_; i_++) { \
 std::cout << std::dec << std::endl; \
 }
 
-#include "ptkdrv.h"
-#include "ptkddr.h"
 #include "math.h"
 #include <string>
 

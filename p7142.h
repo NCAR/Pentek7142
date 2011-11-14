@@ -4,8 +4,6 @@
 #include "p71xx.h"
 #include "p7142Dn.h"
 #include "p7142Up.h"
-#include "ptkdrv.h"
-#include "ptkddr.h"
 #include "DDCregisters.h"
 
 #include <iostream>

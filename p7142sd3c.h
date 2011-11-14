@@ -406,8 +406,6 @@ protected:
     bool _freeRun;
     /// Time of the first xmit pulse.
     boost::posix_time::ptime _xmitStartTime;
-    /// peek-poke structure pointer
-    ARG_PEEKPOKE _pp;
     /// The adc clock rate in Hz
     double _adc_clock;
     /// The prf(s) in Hz

@@ -39,16 +39,9 @@ p7142Dn::p7142Dn(
     p7142->start(chanId);
 
     // Set the clock source.
-    int clockSource = internalClock ? CLK_SRC_INTERN : CLK_SRC_FRTPAN;
+    //int clockSource = internalClock ? CLK_SRC_INTERN : CLK_SRC_FRTPAN;
 
     /// @todo Figure out how to set the clock source to internal under ReadyFlow
-    /**
-    if (ioctl(_dnFd, FIOCLKSRCSET, clockSource) == -1) {
-        std::cerr << "unable to set the clock source for "
-                << _dnName << std::endl;
-        abort();
-    }
-    **/
 }
 
 ////////////////////////////////////////////////////////////////////////////////

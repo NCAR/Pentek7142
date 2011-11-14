@@ -133,22 +133,6 @@ p7142::resetDCM() {
 
     return;
 
-    // read the DCM control register
-    //unsigned int val = _controlIoctl(FIOREGGET, DCM_CONTROL);
-
-    // turn on the DCM reset bit
-    //val |= 0x10;
-    //_controlIoctl(FIOREGSET, DCM_CONTROL, val);
-    //usleep(1000);
-
-    //val = _controlIoctl(FIOREGGET, DCM_CONTROL);
-
-    // turn off the DCM reset bit
-    //val &= ~0x10;
-    //_controlIoctl(FIOREGSET, DCM_CONTROL, val);
-    //usleep(1000);
-
-    //val = _controlIoctl(FIOREGGET, DCM_CONTROL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

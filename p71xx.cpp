@@ -616,16 +616,9 @@ p71xx::gauss(double mean, double stdDev) {
 ////////////////////////////////////////////////////////////////////////////////////////
 int
 p71xx::bufset(int fd, int intbufsize, int bufN) {
-	BUFFER_CFG bc;
-	bc.bufno = 0;
-	bc.bufsize = bufN*intbufsize;
-	bc.intbufsize = intbufsize;
-	bc.physAddr = 0;
-
-	int status = ioctl(fd, BUFSET, &bc);
-	if (status == -1) {
-		std::cout << "Error setting pentek buffer sizes" << std::endl;
-		perror("");
-	}
-	return status;
+	/// @todo The dma buffersize should be adjusted based on
+	/// a specified desired dma interrupt rate. It will be up
+	/// to the user to figure out what that should be, usually
+	/// in terms of the desired number of beams per interrupt.
+	return 0;
 }

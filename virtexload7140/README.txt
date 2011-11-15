@@ -9,3 +9,9 @@ created.
 
 Note that they did not do anything to address the issue that the virtexload7142
 program never has worked at all.
+
+_______________________
+11/15/2011: Update
+
+We have abandoned the Pentek Linux driver, and switched to ReadyFlow. 
+Use ReadyFlow/x86_64/examples/fpgaload.c to load bitstreams.

@@ -125,8 +125,8 @@ p71xx::read(int chan, char* buf, int bytes) {
 	while (_readBufAvail[chan] < bytes) {
 		{
 			// move unused data to the front of the buffer
-			for (size_t i = 0; i < _readBufAvail[chan]; i++) {
-				size_t j = _readBufOut[chan] + i;
+			for (int i = 0; i < _readBufAvail[chan]; i++) {
+				int j = _readBufOut[chan] + i;
 				_readBuf[chan][i] = _readBuf[chan][j];
 			}
 			_readBufOut[chan] = 0;
@@ -142,8 +142,8 @@ p71xx::read(int chan, char* buf, int bytes) {
 
 			// At least one buffer is available in the circular buffer,
 			// Transfer the data to _readBuf
-			for (size_t i = 0; i < _dmaBufSize; i++) {
-				size_t j = _readBufAvail[chan] + i;
+			for (int i = 0; i < _dmaBufSize; i++) {
+				int j = _readBufAvail[chan] + i;
 				_readBuf[chan][j] = _circBufferList[chan][0][i];
 			}
 			_readBufAvail[chan] += _dmaBufSize;
@@ -156,8 +156,8 @@ p71xx::read(int chan, char* buf, int bytes) {
 	}
 
 	// copy requested bytes from _readBuf[chan] to the user buffer
-	for (size_t i = 0; i < bytes; i++) {
-		size_t j = _readBufOut[chan] + i;
+	for (int i = 0; i < bytes; i++) {
+		int j = _readBufOut[chan] + i;
 		buf[i] = _readBuf[chan][j];
 	}
 
@@ -524,22 +524,6 @@ p71xx::enableGateGen() {
 	/// or off. Need to track this down.
 	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_ENABLE);
 	std::cout << "GateGen enabled" << std::endl;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
-void
-p71xx::disableGateGen() {
-
-    // disable FIFO writes (set Gate in reset)
-
-	///@todo Temoprarily using the GateFlow gating signal to
-	/// enable/disable data flow. This will be changed to
-	/// using the timers for this purpose.
-	/// @todo It doesn't seem to make any difference whether the gate is on
-	/// or off. Need to track this down.
-	P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
-	std::cout << "GateGen disabled" << std::endl;
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

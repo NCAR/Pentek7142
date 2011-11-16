@@ -374,7 +374,7 @@ int p7142sd3c::sd3cRev() {
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
-    int retval = (ddcTypeAndRev & 0x3fff > 502) ?
+    int retval = ((ddcTypeAndRev & 0x3fff) > 502) ?
         (ddcTypeAndRev & 0x3fff) : (ddcTypeAndRev & 0x7fff);
 
     return retval;
@@ -391,7 +391,7 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
-    int ddcType = (ddcTypeAndRev & 0x3fff > 502) ?
+    int ddcType = ((ddcTypeAndRev & 0x3fff) > 502) ?
         (ddcTypeAndRev & 0xC000) >> 14 : (ddcTypeAndRev & 0x8000) >> 15;
     
     DDCDECIMATETYPE retval = DDC4DECIMATE;

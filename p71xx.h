@@ -35,13 +35,7 @@ std::cout << std::dec << std::endl; \
 #include "ptk7142.h"
 #endif
 
-// Use the following reference for now, so that we
-// get the 7142.h file from the ReadyFlow tree, rather than
-// the one of the same name that is in the Pentek Linux driver
-// tree.
-/// @todo Remove readyflow/include once we have eliminated all of the
-/// Pentek Linux driver code from the pentek access library.
-#include "readyflow/include/7142.h"
+#include "7142.h"
 
 #include <boost/thread/recursive_mutex.hpp>
 
@@ -169,7 +163,6 @@ struct DmaHandlerData {
 			/// @todo Do we need to be calling these functions? It was done in the Linux driver and readyflow,
 			/// but they don't seem to do anything.
             void enableGateGen();
-            void disableGateGen();
 
 		protected:
 			/// Initialize the ReadyFlow library.
@@ -287,7 +280,7 @@ struct DmaHandlerData {
             /// _readBufOut is the index of the next byte available in the buffer.
             std::vector<char> _readBuf[4];
             /// The number of bytes available in the _readBuf.
-            unsigned int _readBufAvail[4];
+            int _readBufAvail[4];
             /// The next avaiable byte in _readBuf.
             unsigned int _readBufOut[4];
             /// The number bytes to be transferred in each DMA transaction. Note

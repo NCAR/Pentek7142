@@ -26,7 +26,7 @@ p7142Up::p7142Up(p7142 * p7142ptr,
     if (isSimulating())
         return;
 
-    // Note that most of the DAC related initialization was
+    // Note that most of the DAC related initialization is
     // performed in p71xx().
 
     // Initialize the DAC configuration registers
@@ -182,19 +182,6 @@ p7142Up::getDACreg(int reg) {
     char val = (char)P7142Dac5686ReadReg (&_p7142ptr._p7142Regs.BAR2RegAddr, reg);
 
     return val;
-
-    ///////// Original code follows, from the Pentek Linux Driver days /////////
-    //ARG_PEEKPOKE pp;
-    //pp.offset = reg;
-    //pp.page = 0;
-    //pp.mask = 0;
-
-    //int status = ioctl(fd, FIOREGGET, (long)&pp);
-    //if (status < 0) {
-    //    perror("FIOREGGET ioctl error");
-    //}
-
-    //return(pp.value);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -206,18 +193,6 @@ p7142Up::setDACreg(int reg, char val) {
         return;
 
     P7142Dac5686WriteReg (&_p7142ptr._p7142Regs.BAR2RegAddr, reg, val);
-
-    ///////// Original code follows, from the Pentek Linux Driver days /////////
-    //ARG_PEEKPOKE pp;
-    //pp.offset = reg;
-    //pp.page = 0;
-    //pp.mask = 0;
-    //pp.value = val;
-
-    //int status = ioctl(fd, FIOREGSET, (long)&pp);
-    //if (status < 0) {
-    //    perror("FIOREGSET ioctl error");
-    //}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -248,33 +223,6 @@ p7142Up::write(int32_t* data, int n) {
     	std::cerr << "DMA write to memory bank 2 failed, with status code: " << writeStatus << std::endl;
     }
 
-    ///////// Original code follows, from the Pentek Linux Driver days /////////
-    /**
-    int memFd = open(_mem2Name.c_str(), O_WRONLY);
-    if (memFd < 0) {
-        std::cerr << "cannot access " << _mem2Name << "\n";
-        perror("");
-        exit(1);
-    }
-
-    // set the memory bank depth
-    ioctl(memFd, FIODEPTHSET, _mem2depth);
-
-    // It appears that you need to do the
-    // following lseek to insure writing to
-    // the start of memory.
-    lseek(memFd, 0, SEEK_SET);
-
-    // write the baseband to memory bank 2
-    if (::write(memFd, (char*)(data), _mem2depth*4)
-            != _mem2depth*4) {
-        std::cerr << "unable to fill pentek memory bank 2" << std::endl;
-        perror("");
-        exit(1);
-    }
-
-    close (memFd);
-    **/
 }
 
 
@@ -309,58 +257,6 @@ p7142Up::startDAC() {
      P7142_SET_FIFO_CTRL_RESET(
     		 _p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
     		 P7142_FIFO_RESET_RELEASE);
-
-    ///////// Original code follows, from the Pentek Linux Driver days /////////
-    /**
-    // close the upconverter so that the memory counter stops running
-    if (_upFd != -1) {
-        close(_upFd);
-        _upFd = -1;
-    }
-
-    _upFd = open(_upName.c_str(), O_RDONLY);
-    if (_upFd < 0) {
-        std::cerr << "unable to open " << _upName << " in startDAC()" << std::endl;
-    }
-
-    // select the memory as dac data source
-    long route = 1;
-    ioctl(_upFd, FIOMEMROUTESET, route);
-    std::cout << "memrouteset performed on " << _upName << std::endl;
-
-    // Clear bit 6 in the DDR Memory Control Register. It is mapped to 
-    // mem_dac_run in the MEMORY_APP (dram_dtl.vhd). When 
-    // mem_dac_run is set low, the memory counter is reset
-    // to MEM2_START_REG.
-    ARG_PEEKPOKE pp;
-    pp.offset = DDR_MEM_CONTROL;
-    ioctl(_p7142.ctrlFd(), FIOREGGET, &pp);
-    // set the DACM fifo reset line (bit 1)
-    pp.value = pp.value | 0x0000002;
-    ioctl(_p7142.ctrlFd(), FIOREGSET, &pp);
-
-    // Set the dacm fifo reset (bit 1)
-    pp.offset = DAC_FIFO_CONTROL;
-    ioctl(_p7142.ctrlFd(), FIOREGGET, &pp);
-    pp.value = pp.value & 0x000FFFD;
-    ioctl(_p7142.ctrlFd(), FIOREGSET, &pp);
-
-    // Run the dacm fifo
-    pp.offset = DAC_FIFO_CONTROL;
-    ioctl(_p7142.ctrlFd(), FIOREGGET, &pp);
-    // Clear the dacm fifo reset (bit 2) so that the fifo can run
-    pp.value = pp.value & 0x000FFFD;
-    ioctl(_p7142.ctrlFd(), FIOREGSET, &pp);
-
-    // Set bit 6 in the DDR Memory Control Registered. This will allow the 
-    // values in memory bank 2 to be loaded into the DACM fifo, where they will
-    // be gated out to the DAC by the tx gate.
-    pp.offset = DDR_MEM_CONTROL;
-    ioctl(_p7142.ctrlFd(), FIOREGGET, &pp);
-    pp.value = pp.value | 0x0000040;
-    ioctl(_p7142.ctrlFd(), FIOREGSET, &pp);
-    **/
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -380,22 +276,6 @@ p7142Up::stopDAC() {
   char config2 = (_cmMode << 1) | 0x1;
   setDACreg(DAC5687_CONFIG2_REG, config2);
 
-  ///////// Original code follows, from the Pentek Linux Driver days /////////
-  /**
-  if (_upFd != -1) {
-
-      // turn off data routing from mem2
-      long route = 0;
-      ioctl(_upFd, FIOMEMROUTESET, route);
-
-      // disable NCO in order to stop DAC
-      char config2 = 0;
-      setDACreg(_upFd, 0x03, config2);
-
-      close(_upFd);
-      _upFd = -1;
-  }
-	**/
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -429,13 +309,12 @@ p7142Up::ncoConfig(double fNCO, double fDAC, char& nco_freq_0, char& nco_freq_1,
         /// wrong with the formula in the DAC datasheet.
         freq = (long long)(((fNCO/fNCO_CLK)+1)*(0x100000000ll));
 
-
-    // std::cout << "freq is " << std::hex << freq << std::dec << std::endl;
-
     nco_freq_0 = (freq >>  0) & 0xff;
     nco_freq_1 = (freq >>  8) & 0xff;
     nco_freq_2 = (freq >> 16) & 0xff;
     nco_freq_3 = (freq >> 24) & 0xff;
+
+    // std::cout << "freq is " << std::hex << freq << std::dec << std::endl;
 
 }
 

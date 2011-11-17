@@ -40,8 +40,8 @@ void dmaWriteIntHandler(PVOID               hDev,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-p7142::p7142(std::string devName, bool simulate):
-  p71xx(devName, simulate), _downconverters(P7142_NCHANNELS), _upconverter(0)
+p7142::p7142(std::string devName, int dmaBufferSize, bool simulate):
+  p71xx(devName, dmaBufferSize, simulate), _downconverters(P7142_NCHANNELS), _upconverter(0)
 {
 }
 

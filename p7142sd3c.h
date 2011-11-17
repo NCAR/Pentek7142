@@ -45,6 +45,8 @@ public:
     /// Constructor.
     /// @param devName The top level device name (e.g.,
     /// /dev/pentek/p7142/0. Use ok() to verify successful construction.
+    /// @param dmaBufferSize The size of the DMA buffers. One interrupt will occur for
+    /// this many bytes.
     /// @param simulate Set true for simulation mode.
     /// @param tx_delay the delay for the tx pulse in seconds
     /// @param tx_pulsewidth the length of the transmit pulse in seconds
@@ -69,6 +71,7 @@ public:
     ///     radar.
     p7142sd3c(
     		std::string devName,
+    		int dmaBufferSize,
     		bool simulate,
     		double tx_delay,
     		double tx_pulsewidth,

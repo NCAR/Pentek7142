@@ -22,8 +22,10 @@ namespace Pentek {
 			/// Constructor.
 			/// @param devName The top level device name (e.g.,
 			/// /dev/pentek/p7142/0. Use ok() to verify successful construction.
+			/// @param dmaBufferSize The size of the dma buffers. An interrupt will occur
+		    /// for this number of bytes, for each down channel.
 			/// @param simulate Set true for simulation mode.
-			p7142(std::string devName, bool simulate=false);
+			p7142(std::string devName, int dmaBufferSize = 65536, bool simulate=false);
 			/// Destructor.
 			virtual ~p7142();
             /// A P7142 card has 4 receive channels available.

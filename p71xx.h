@@ -145,7 +145,7 @@ struct DmaHandlerData {
             /// be available via the _ctrlFd file descriptor. Use ok() to 
             /// verify successful construction.
             /// @param simulate Set true if we operate in simulation mode.
-			p71xx(std::string devName, bool simulate=false);
+			p71xx(std::string devName, int dmabufsize = DMABUFSIZE, bool simulate=false);
 			/// Destructor.
 			virtual ~p71xx();
 			/// @return true if the last operation was successful,

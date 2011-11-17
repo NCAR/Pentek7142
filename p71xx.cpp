@@ -36,14 +36,21 @@ void dmaIntHandler(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p71xx::p71xx(std::string devName, bool simulate):
+p71xx::p71xx(std::string devName, int dmabufsize,  bool simulate):
 _devName(devName),
 _ctrlFd(-1),
 _simulate(simulate),
 _p71xxMutex(),
 _isReady(false),
-_dmaBufSize(DMABUFSIZE)
+_dmaBufSize(dmabufsize)
 {
+
+	// dma buffer size must be a multiple of 4
+	if ((_dmaBufSize % 4) || (_dmaBufSize <= 0)) {
+		std::cout <<"DMA buffer size must be a positive  multiple of 4 bytes, " << _dmaBufSize << " was specified" << std::endl;
+		abort();
+	}
+
     boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     // If we're simulating, things are simple...
 	if (_simulate) {

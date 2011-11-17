@@ -30,11 +30,8 @@ p7142Dn::p7142Dn(
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     if (isSimulating()) {
-        _dnName = "dnSimulate";
         return;
     }
-
-    _dnName = _p7142.devName();
 
     p7142->start(chanId);
 
@@ -47,13 +44,6 @@ p7142Dn::p7142Dn(
 ////////////////////////////////////////////////////////////////////////////////
 p7142Dn::~p7142Dn() {
   boost::recursive_mutex::scoped_lock guard(_mutex);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-std::string
-p7142Dn::dnName() {
-    //boost::recursive_mutex::scoped_lock guard(_mutex);
-    return _dnName;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

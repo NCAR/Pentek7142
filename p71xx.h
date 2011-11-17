@@ -139,13 +139,9 @@ struct DmaHandlerData {
 
 		public:
 			/// Constructor,
-			/// @param devName The top level device name (e.g., 
-            /// /dev/pentek/p7140/0. Other device names, such as ctrl will be 
-            /// constructed as needed. The ctrl device will be opened and will 
-            /// be available via the _ctrlFd file descriptor. Use ok() to 
-            /// verify successful construction.
+			/// @param The board number.
             /// @param simulate Set true if we operate in simulation mode.
-			p71xx(std::string devName, int dmabufsize = DMABUFSIZE, bool simulate=false);
+			p71xx(int boardNum, int dmabufsize = DMABUFSIZE, bool simulate=false);
 			/// Destructor.
 			virtual ~p71xx();
 			/// @return true if the last operation was successful,
@@ -246,13 +242,9 @@ struct DmaHandlerData {
             /// register. It is not clear that we need to even use this.
             volatile unsigned int *gateGenReg;
 
-            //int* adcData;
-            /// The root device name
-            std::string _devName;
-            /// The ctrl device name
-            std::string _devCtrl;
-	        /// file descriptor for the ctrl device
-	        int _ctrlFd;
+
+            /// The board number.
+            int _boardNum;
             /// set true if in simulation mode
             bool _simulate;
             /// recursive mutex which provides us thread safety.

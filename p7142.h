@@ -20,21 +20,17 @@ namespace Pentek {
 
 		public:
 			/// Constructor.
-			/// @param devName The top level device name (e.g.,
-			/// /dev/pentek/p7142/0. Use ok() to verify successful construction.
+			/// @param The board number.
 			/// @param dmaBufferSize The size of the dma buffers. An interrupt will occur
 		    /// for this number of bytes, for each down channel.
 			/// @param simulate Set true for simulation mode.
-			p7142(std::string devName, int dmaBufferSize = 65536, bool simulate=false);
+			p7142(int boardNum, int dmaBufferSize = 65536, bool simulate=false);
 			/// Destructor.
 			virtual ~p7142();
             /// A P7142 card has 4 receive channels available.
             static const int P7142_NCHANNELS = 4;
             /// (Suggested) time to sleep after P7142 ioctl calls, in microseconds
             static const int P7142_IOCTLSLEEPUS = 100;
-			/// Return the base device name for our P7142 card.
-			/// @return the base device name.
-			std::string devName() const { return _devName; }
 			
             /// Construct and add a downconverter for one of our receiver channels.
             /// @param chanId The channel identifier (used to select /dn/*B)

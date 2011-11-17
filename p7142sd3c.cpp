@@ -19,11 +19,11 @@ const unsigned int p7142sd3c::ALL_SD3C_TIMER_BITS = 0xff0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142sd3c::p7142sd3c(std::string devName, int dmaBufferSize, bool simulate, double tx_delay,
+p7142sd3c::p7142sd3c(int boardNum, int dmaBufferSize, bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger) : 
-        p7142(devName, dmaBufferSize, simulate),
+        p7142(boardNum, dmaBufferSize, simulate),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
         _gates(gates),
@@ -65,7 +65,7 @@ p7142sd3c::p7142sd3c(std::string devName, int dmaBufferSize, bool simulate, doub
     }
 
     // Announce the FPGA firmware revision
-    std::cout << _devName << " SD3C revision: " << std::dec << _sd3cRev << std::endl;
+    std::cout << "SD3C revision: " << std::dec << _sd3cRev << std::endl;
     if (_sd3cRev == 0) {
         std::cerr << "** WARNING: Revision number is zero. " <<
                 "Was the correct firmware loaded?" << std::endl;

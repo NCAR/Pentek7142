@@ -43,8 +43,7 @@ public:
     } DDCDECIMATETYPE;
 
     /// Constructor.
-    /// @param devName The top level device name (e.g.,
-    /// /dev/pentek/p7142/0. Use ok() to verify successful construction.
+    /// @param boardNum The board number. Use ok() to verify successful construction.
     /// @param dmaBufferSize The size of the DMA buffers. One interrupt will occur for
     /// this many bytes.
     /// @param simulate Set true for simulation mode.
@@ -70,7 +69,7 @@ public:
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar.
     p7142sd3c(
-    		std::string devName,
+    		int boardNum,
     		int dmaBufferSize,
     		bool simulate,
     		double tx_delay,

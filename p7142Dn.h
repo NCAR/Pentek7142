@@ -53,9 +53,6 @@ class p7142Dn {
         /// the over/under-run counter. Return -1 if unable to get this 
         /// information, and set _ok to false.
         virtual int overUnderCount();
-        /// Return the device path for the downconverter.
-        /// @return The device path
-        std::string dnName();
         /// Are we using the card's internal clock?
         /// @return true iff this channel using the card's internal clock
         bool usingInternalClock() const;
@@ -84,10 +81,6 @@ class p7142Dn {
         int _chanId;
         /// The number of bytes read since the last call to bytesRead()
         long _bytesRead;
-        /// The full device name for the downconverter
-        std::string _dnName;
-        /// The downconverter device file descriptor
-        //int _dnFd;
         /// The wavelength for simulated data
         unsigned int _simWaveLength;
         /// The counter for keeping track of the current phase during simulation

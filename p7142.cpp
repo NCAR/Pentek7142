@@ -40,8 +40,8 @@ void dmaWriteIntHandler(PVOID               hDev,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-p7142::p7142(std::string devName, int dmaBufferSize, bool simulate):
-  p71xx(devName, dmaBufferSize, simulate), _downconverters(P7142_NCHANNELS), _upconverter(0)
+p7142::p7142(int boardNum, int dmaBufferSize, bool simulate):
+  p71xx(boardNum, dmaBufferSize, simulate), _downconverters(P7142_NCHANNELS), _upconverter(0)
 {
 }
 
@@ -94,7 +94,7 @@ p7142::addDownconverter(p7142Dn * downconverter) {
     int chanId = downconverter->chanId();
     if (_downconverters[chanId]) {
         std::cerr << "Existing downconverter for channel " << chanId <<
-                " is being replaced on device " << _devName << std::endl;
+                " is being replaced" << std::endl;
         delete _downconverters[chanId];
     }
     _downconverters[chanId] = downconverter;
@@ -106,8 +106,7 @@ p7142::_addUpconverter(p7142Up * upconverter) {
     boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
     if (_upconverter) {
-        std::cerr << "Existing upconverter is being replaced on device " << 
-                _devName << std::endl;
+        std::cerr << "Existing upconverter is being replaced"  << std::endl;
         delete _upconverter;
     }
     _upconverter = upconverter;

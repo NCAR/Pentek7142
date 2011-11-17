@@ -36,9 +36,8 @@ void dmaIntHandler(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p71xx::p71xx(std::string devName, int dmabufsize,  bool simulate):
-_devName(devName),
-_ctrlFd(-1),
+p71xx::p71xx(int boardNum, int dmabufsize,  bool simulate):
+_boardNum(boardNum),
 _simulate(simulate),
 _p71xxMutex(),
 _isReady(false),

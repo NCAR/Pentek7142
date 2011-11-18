@@ -151,15 +151,17 @@ struct DmaHandlerData {
 			/// @return true iff we're in simulation mode.
 			bool isSimulating() const { return _simulate; }
 			/// This routine is called from the ReadyFlow dma interrupt handler
-			/// dmaIntHandler(). It copies data from the dma interrupt buffer to the circular
+			/// adcDmaIntHandler(). It copies data from the dma interrupt buffer to the circular
 			/// buffer list. According to the ReadyFlow notes, dma interrupts are disabled
 			/// while dmaIntHandler() is executing, and so they will be disabled as well
 			/// while we are in this routine.
-            void dmaInterrupt(int chan);
+            void adcDmaInterrupt(int chan);
 			/// @todo Do we need to be calling these functions? It was done in the Linux driver and readyflow,
 			/// but they don't seem to do anything.
             void enableGateGen();
 
+            /// ReadyFlow PCI BAR2 base address.
+            DWORD                 _BAR2Base;
 		protected:
 			/// Initialize the ReadyFlow library.
 			bool initReadyFlow();
@@ -193,7 +195,7 @@ struct DmaHandlerData {
             void start(int chan);
             /// stop the DMA for the specified DMA channel.
             void stop(int chan);
-            /// Read bytes from the channel. If no data are
+            /// Read bytes from the ADC channel. If no data are
             /// available, the thread will be blocked. The request will not
             /// return until the exact number of requested bytes can
             /// be returned.
@@ -204,8 +206,7 @@ struct DmaHandlerData {
             /// @param bytes The number of bytes.
             /// @return The number of bytes read. If an error occurs, minus
             /// one will be returned.
-            int read(int chan, char* buf, int bytes);
-
+            int adcRead(int chan, char* buf, int bytes);
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
             /// ReadyFlow dma handles, one per channel
@@ -217,8 +218,6 @@ struct DmaHandlerData {
             DmaHandlerData        _dmaHandlerData[4];
             /// ReadyFlow PCI BAR0 base address.
             DWORD                 _BAR0Base;
-            /// ReadyFlow PCI BAR2 base address.
-            DWORD                 _BAR2Base;
             /// ReadyFlow PCI slot number.
             DWORD                 _pciSlot;
             /// ReadyFlow module identifier.

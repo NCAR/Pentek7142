@@ -240,6 +240,7 @@ int p7142::ddrMemWrite (P7142_REG_ADDR* p7142Regs,
                       PCI7142_DMA_CMD_STAT_DEMAND_MODE_DISABLE,
                       PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
                       2048,              /* Max Burst Count */
+
                       0);
 
     /* disable DAC buffering.  This parameter is not set by the above
@@ -354,10 +355,11 @@ int p7142::ddrMemWrite (P7142_REG_ADDR* p7142Regs,
         lastAddr);
 
     /* check read operation */
-    if (lastAddr != bankEndAddr)
-    {
+   if (lastAddr != bankEndAddr)
+   {
         /* determine how many extra bytes to write */
         overWriteVal = (bankEndAddr - lastAddr) << 3;
+    	std::cout << "MEM write overwrite of " << overWriteVal << "bytes" << std::endl;
 
         /* set up channel parameters */
         P7142DmaChanSetup(&(dmaParams.dmaChan[P7142_DMA_CHAN_7]),

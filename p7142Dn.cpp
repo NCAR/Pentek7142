@@ -107,7 +107,7 @@ p7142Dn::read(char* buf, int bufsize) {
 
     if (!isSimulating()) {
         // not in simulation mode; do a proper read from the device
-        int n = _p7142.read(_chanId, buf, bufsize);
+        int n = _p7142.adcRead(_chanId, buf, bufsize);
 
         if (n > 0)
             _bytesRead += n;

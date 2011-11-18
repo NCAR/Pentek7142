@@ -9,9 +9,10 @@
 
 using namespace Pentek;
 
-/// This function is called by windriver each time a dma transfer is complete.
+/// This function is called by windriver each time a dma transfer is complete
+/// from an ADC channel (channels 0-3).
 /// The user data (pData) that is delivered with the interrupt contains a
-/// pointer to an instance of p71xx. The p71xx::dmaInterrupt() method is called
+/// pointer to an instance of p71xx. The p71xx::adcDmaInterrupt() method is called
 /// to handle the actual processing of the dma transfer.
 ///
 /// DMA interrupts are cleared by the Kernel Device Driver.
@@ -21,7 +22,7 @@ using namespace Pentek;
 /// @param dmaChannel - DMA channel generating the interrupt(0-3)
 /// @param pData - Pointer to user defined data
 /// @param pIntResults - Pointer to the interrupt results structure
-void dmaIntHandler(
+void adcDmaIntHandler(
 		PVOID hDev,
 		unsigned int dmaChannel,
 		PVOID pData,
@@ -32,7 +33,7 @@ void dmaIntHandler(
 	DmaHandlerData* dmaData = (DmaHandlerData*) pData;
 
 	// Call the dmaInterrupt member function in the p71xx object
-	dmaData->p71xx->dmaInterrupt(dmaChannel);
+	dmaData->p71xx->adcDmaInterrupt(dmaChannel);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -87,7 +88,7 @@ p71xx::~p71xx() {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p71xx::dmaInterrupt(int chan) {
+p71xx::adcDmaInterrupt(int chan) {
 	/// @todo this logic needs to be refactored so that there is no dynamic allocation
 	/// happening during dma interrrupts.
 	std::vector<char> data;
@@ -116,7 +117,7 @@ p71xx::dmaInterrupt(int chan) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 int
-p71xx::read(int chan, char* buf, int bytes) {
+p71xx::adcRead(int chan, char* buf, int bytes) {
 
 	// this is where it all happens
 
@@ -500,7 +501,7 @@ p71xx::start(int chan) {
 	int status = PTK714X_DMAIntEnable(dmaHandle[chan],
 								   PTK714X_DMA_DESCRIPTOR_FINISH,
 								   &_dmaHandlerData[chan],
-								   (PTK714X_INT_HANDLER)dmaIntHandler);
+								   (PTK714X_INT_HANDLER)adcDmaIntHandler);
 
 	if (status != PTK714X_STATUS_OK) {
 		std::cerr << __FILE__ << ":" << __FUNCTION__ << ": Unable to enable DMA interrupt for channel " << chan << std::endl;

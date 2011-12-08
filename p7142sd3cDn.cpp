@@ -134,7 +134,7 @@ p7142sd3cDn::p7142sd3cDn(
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142sd3cDn::~p7142sd3cDn() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
 
     delete [] _buf;
 }

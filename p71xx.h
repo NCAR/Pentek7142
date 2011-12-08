@@ -189,8 +189,6 @@ struct DmaHandlerData {
             void configInParameters();
             /// Configure the up conversion path parameters
             void configOutParameters();
-            /// Configure the DAC parameters, in p7142Dac5686Params
-            void configDacParameters();
             /// start DMA for the specified DMA channel
             void start(int chan);
             /// stop the DMA for the specified DMA channel.
@@ -207,15 +205,42 @@ struct DmaHandlerData {
             /// @return The number of bytes read. If an error occurs, minus
             /// one will be returned.
             int adcRead(int chan, char* buf, int bytes);
+            /// Write to the selected memory bank.
+            /// @param bank The selected bank -  0, 1 or 2
+            /// The bytes to be written.
+            /// @return The number of bytes written. If an error occurs,
+            /// minus one will be returned.
+            int memWrite(int bank, int32_t* buf, int bytes);
+            /// Read from the selected memory bank.
+            /// @param bank The selected bank -  0, 1 or 2
+            /// @param buf The data will be returned here.
+            /// memwrite() will resize the vector as required.
+            /// @return The number of bytes read. If an error occurs,
+            /// minus one will be returned.
+            int memRead(int bank, int32_t* buf, int bytes);
+
+            int ddrMemWrite (P7142_REG_ADDR *p7142Regs,
+                             unsigned int    bank,
+                             unsigned int    bankStartAddr,
+                             unsigned int    bankDepth,
+                             unsigned int   *dataBuf,
+                             void*           hDev);
+            int ddrMemRead (P7142_REG_ADDR *p7142Regs,
+                            unsigned int    bank,
+                            unsigned int    bankStartAddr,
+                            unsigned int    bankDepth,
+                            unsigned int   *dataBuf,
+                            void*           hDev);
+
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
             /// ReadyFlow dma handles, one per channel
-            PTK714X_DMA_HANDLE*   dmaHandle[4];
+            PTK714X_DMA_HANDLE*   _adcDmaHandle[4];
             /// ReadyFlow dma buffer address pointers, in user space
-            PTK714X_DMA_BUFFER    dmaBuf[4];
+            PTK714X_DMA_BUFFER    _adcDmaBuf[4];
             /// ReadyFlow user data. A pointer to these will be passed into
             /// dmaIntHandler().
-            DmaHandlerData        _dmaHandlerData[4];
+            DmaHandlerData        _adcDmaHandlerData[4];
             /// ReadyFlow PCI BAR0 base address.
             DWORD                 _BAR0Base;
             /// ReadyFlow PCI slot number.
@@ -234,6 +259,8 @@ struct DmaHandlerData {
             P7142_INPUT_PARAMS    _p7142InParams;
             /// ReadyFlow parameters for the up conversion path configuration.
             P7142_OUTPUT_PARAMS   _p7142OutParams;
+            /// ReadyFlow parameters for the DDR memory.
+            P7142_DDR_MEM_PARAMS  _p7142MemParams;
             /// ReadyFlow parameters for DAC configuration.
             P7142_DAC5686_PARAMS  _p7142Dac5686Params;
 

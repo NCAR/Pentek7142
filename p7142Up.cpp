@@ -18,7 +18,7 @@ p7142Up::p7142Up(p7142 * p7142ptr,
         _ncoFreqHz(ncoFreqHz),
         _cmMode(cmMode),
         _interp(2),
-        _mem2depth(0),
+        _mem2depthWords(0),
         _mutex()
 {
     boost::recursive_mutex::scoped_lock guard(_mutex);
@@ -38,11 +38,33 @@ p7142Up::p7142Up(p7142 * p7142ptr,
 
 ////////////////////////////////////////////////////////////////////////////////////////
 p7142Up::~p7142Up() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+    //boost::recursive_mutex::scoped_lock guard(_mutex);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 bool p7142Up::initDAC() {
+
+    // Set DAC FIFO clock source
+    // P7142_DAC_CTRL_STAT_DAC_CLK_SELECT (0x0)
+    // P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS (0x8)
+    P7142_SET_OUTPUT_CTRL_STAT_DAC_CLK(
+    		_p7142ptr._p7142Regs.BAR2RegAddr.dacCtrlStat,
+    		P7142_DAC_CTRL_STAT_DAC_CLK_BYPASS);
+
+	// Enable the PLL on the DAC
+    // P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE  (0x4)
+	// P7142_DAC_CTRL_STAT_PLL_VDD_DISABLE (0x0)
+    P7142_SET_OUTPUT_CTRL_STAT_PLL_VDD(
+    		_p7142ptr._p7142Regs.BAR2RegAddr.dacCtrlStat,
+    		P7142_DAC_CTRL_STAT_PLL_VDD_ENABLE);
+
+    // Choose whether to use or bypass the DCM for the DAC clock
+    // P7142_DCM_CTRL_DCM_SEL_IN_CLK (0x0)
+    // P7142_DCM_CTRL_DCM_SEL_DCM    (0x8)
+    P7142_SET_DCM_CTRL_CLK_SEL(
+    		_p7142ptr._p7142Regs.BAR2RegAddr.dcmControl,
+    		P7142_DCM_CTRL_DCM_SEL_IN_CLK);
+
 
 	// Version: set FIR1 to low pass on DAC ChA and ChB, also disable DAC B, if operating at 48 or 125 MHz
     char version =
@@ -116,20 +138,26 @@ bool p7142Up::initDAC() {
     char nco_2;
     char nco_3;
     ncoConfig(_ncoFreqHz, 4*_sampleClockHz, nco_0, nco_1, nco_2, nco_3);
-    std::cout << std::hex <<
-            (int)nco_0 << " " <<
-            (int)nco_1 << " " <<
-            (int)nco_2 << " " <<
-            (int)nco_3 << " " <<
-            std::dec << std::endl;
+    //std::cout << std::hex <<
+    //        (int)nco_0 << " " <<
+    //        (int)nco_1 << " " <<
+    //        (int)nco_2 << " " <<
+    //        (int)nco_3 << " " <<
+    //        std::dec << std::endl;
 
-    setDACreg(DAC5687_NCO_FREQ_0_REG, nco_0);
-    setDACreg(DAC5687_NCO_FREQ_1_REG, nco_1);
-    setDACreg(DAC5687_NCO_FREQ_2_REG, nco_2);
-    setDACreg(DAC5687_NCO_FREQ_3_REG, nco_3);
+    setDACreg(DAC5687_NCO_FREQ_0_REG,       nco_0);
+    setDACreg(DAC5687_NCO_FREQ_1_REG,       nco_1);
+    setDACreg(DAC5687_NCO_FREQ_2_REG,       nco_2);
+    setDACreg(DAC5687_NCO_FREQ_3_REG,       nco_3);
 
-    std::cout << "DAC registers after configuration " << std::endl;
-    dumpDACregs();
+    setDACreg(DAC5687_SER_DATA_1_REG,       0xff);
+
+    setDACreg(DAC5687_DACA_GAIN_0_REG,      0xff);
+    setDACreg(DAC5687_DACB_GAIN_0_REG,      0xff);
+    setDACreg(DAC5687_DACA_DACB_GAIN_1_REG, 0xff);
+
+    //std::cout << "DAC registers after configuration " << std::endl;
+    //dumpDACregs();
 
     std::cout << "sample clock:     " << _sampleClockHz << std::endl;
     std::cout << "nco frequency:    " << _ncoFreqHz << std::endl;
@@ -157,7 +185,7 @@ p7142Up::dumpDACregs() {
 
     for (int i = 0; i < 32; i++) {
         // get value
-        char val = getDACreg(i);
+        char val = getDACreg(i<<8);
         std::cout << "DAC register 0x"  << std::hex  << i << std::dec << ":";
         // print binary
         for (int i = 0; i < 8; i++) {
@@ -193,6 +221,7 @@ p7142Up::setDACreg(int reg, char val) {
         return;
 
     P7142Dac5686WriteReg (&_p7142ptr._p7142Regs.BAR2RegAddr, reg, val);
+    usleep(1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -204,59 +233,113 @@ p7142Up::write(int32_t* data, int n) {
         return;
 
     // memory depth in 4 byte words
-    _mem2depth = n;
+    _mem2depthWords = n;
 
-    P7142_SET_DDR_MEM_DEPTH(
-    		_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemBankDepth[2].Lsb,
-    		_mem2depth);
+    // write to memory bank 2
+    int writeStatus = _p7142ptr.memWrite(2, data, 4*n);
 
-    // Transfer data to memory 2
-    int writeStatus = _p7142ptr.ddrMemWrite(
-    		&_p7142ptr._p7142Regs,
-    		P7142_DDR_MEM_BANK2,
-            0,
-            n*4,
-            data,
-            _p7142ptr._deviceHandle);
-
-    if (writeStatus) {
+    if (writeStatus < 0) {
     	std::cerr << "DMA write to memory bank 2 failed, with status code: " << writeStatus << std::endl;
+    }
+
+    return;
+
+    // the following code can be enabled if you want to verify that the memory writes are working
+    std::vector<int32_t> readBack;
+    readBack.resize(n);
+
+    int readStatus = _p7142ptr.memRead(2, &readBack[0], 4*n);
+
+    if (readStatus < 0) {
+    	std::cerr << "DMA read from memory bank 2 failed, with status code: " << readStatus << std::endl;
+    }
+
+    for (int i = 0; i < n; i++) {
+    	std::cout << i << ": " << std::hex << data[i] << " " << readBack[i] << std::dec << std::endl;
     }
 
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////
-void
-p7142Up::startDAC() {
-    boost::recursive_mutex::scoped_lock guard(_mutex);
+void p7142Up::startDAC() {
+	boost::recursive_mutex::scoped_lock guard(_mutex);
 
-    if (isSimulating())
-        return;
+	if (isSimulating())
+		return;
 
-    // Set DDR memory for output to DAC. This will clear and then set
-    // bits D06 and D10 in the DDR memory control.
-    // Resetting D06 has the side effect of zeroing the memory counter.
-    P7142_SET_DDR_MEM_MODE(
-    		_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
-     		P7142_DDR_MEM_BANK_2_DAC_OUTPUT_MODE);
+	uint32_t memreg;
+	uint32_t temp;
 
-     // Enable the DAC memory FIFO. This sets the FIFO enable bit D0
-     P7142_SET_FIFO_CTRL_FIFO_ENABLE(
-    		_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
-    		P7142_FIFO_ENABLE);
+	// Some notes:
+	// In the memory to DAC mode, data is clocked out of memory bank2
+	// into the DACM fifo, and then clocked out of there to the DAC.
+	// It turms out that DACM shares configuration lines with
+	// the regular DAC fifo. So, to control the DACM fifo, you
+	// make calls to ReadyFlow which appear to be accessing the regular
+	// DAC fifo (via dacFifo.FifoCtrl).
+	//
+	// The memory and dacm control logic are found in dram_dtl.vhd.
+	//
+	// Don't forget to usleep() after changing the control bits.
+	// It took about three weeks of fooling around to discover why
+	// the memory counter was not being initialized to zero. The previous
+	// code did not have this issue, since it accessed locations via
+	// ioctls, which probably had enough overhead to allow preceeding
+	// signal changed to be latched by gateflow.
 
-     // Place the DAC memory FIFO into reset by setting bit D1.
-     P7142_SET_FIFO_CTRL_RESET(
-    		 _p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
-    		 P7142_FIFO_RESET_HOLD);
+	// set the memory depth
+	P7142_SET_DDR_MEM_DEPTH(
+			_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemBankDepth[2].Lsb,
+			_mem2depthWords);
+	usleep(1);
 
-     // Place the DAC memory FIFO in run mode by clearing bit D1. The FIFO
-     // will be clocked when the tx_gate allows the memory counter
-     // to run.
-     P7142_SET_FIFO_CTRL_RESET(
-    		 _p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
-    		 P7142_FIFO_RESET_RELEASE);
+	// set the memory address start value
+	P7142_SET_DDR_MEM_RW_ADDR(
+			_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemBankRwAddr[2].Lsb, 0);
+	usleep(1);
+
+	// select memory bank 2 => dacm fifo => DAC mode
+	P7142_SET_DDR_MEM_MODE( _p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl,
+			P7142_DDR_MEM_BANK_2_DAC_OUTPUT_MODE);
+	usleep(1);
+
+	// Disable memory bank 2 (bit D06). This is mapped to mem_dac_run in
+	// dram_dtl.vhd. Turns out that setting it low resets the mem2 address
+	// counter.
+	P7142_REG_READ(_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl, memreg);
+	temp = memreg & ~0x0040;
+	P7142_REG_WRITE(_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl, temp);
+	usleep(1);
+	// Memory address counter has been reset. Re-enable memory 2.
+	temp = memreg | 0x0040;
+	P7142_REG_WRITE(_p7142ptr._p7142Regs.BAR2RegAddr.ddrMem.ddrMemCtrl, temp);
+	usleep(1);
+
+	// disable the dacm fifo.
+	P7142_SET_FIFO_CTRL_FIFO_ENABLE(
+			_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+			P7142_FIFO_DISABLE);
+	usleep(1);
+
+	// put dacm fifo into reset
+	P7142_SET_FIFO_CTRL_RESET(
+			_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+			P7142_FIFO_RESET_HOLD);
+	usleep(1);
+
+	// bring dacm fifo out of reset
+	P7142_SET_FIFO_CTRL_RESET(
+			_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+			P7142_FIFO_RESET_RELEASE);
+	usleep(1);
+
+	// re-enable dacm fifo
+	P7142_SET_FIFO_CTRL_FIFO_ENABLE(
+			_p7142ptr._p7142Regs.BAR2RegAddr.dacFifo.FifoCtrl,
+			P7142_FIFO_ENABLE);
+	usleep(1);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

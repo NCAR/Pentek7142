@@ -98,7 +98,7 @@ class p7142Up {
         long _interp;
         /// The depth of mem2 in 4 byte words. mem2 will contain the 
         /// DAC signal
-        long _mem2depth;
+        long _mem2depthWords;
         /// Mutex for thread safety
         mutable boost::recursive_mutex _mutex;
 

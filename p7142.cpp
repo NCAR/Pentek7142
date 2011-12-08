@@ -47,7 +47,7 @@ p7142::p7142(int boardNum, int dmaBufferSize, bool simulate):
 
 ////////////////////////////////////////////////////////////////////////////////
 p7142::~p7142() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    //boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     for (int i = 0; i < P7142_NCHANNELS; i++) {
         delete _downconverters[i];
     }

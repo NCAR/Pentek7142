@@ -114,9 +114,9 @@ _dmaBufSize(dmabufsize)
 ////////////////////////////////////////////////////////////////////////////////////////
 p71xx::~p71xx() {
 
-    //boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
-    for (int i = 0; 0 < 8; i++) {
+    for (int i = 0; i < 4; i++) {
     	P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), 0);
     }
 

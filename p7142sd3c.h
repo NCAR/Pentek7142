@@ -19,7 +19,7 @@ static const double SPEED_OF_LIGHT = 2.99792458e8;  // m s-1
 
 namespace Pentek {
 
-/// A p7142 class specialized for cards running the SD3C firmware.
+/// @brief A p7142 class specialized for cards running the SD3C firmware.
 ///
 /// <h2>The SD3C firmware</h2>
 /// The Pentek 7142 and the associated SD3C firmware support four 
@@ -42,7 +42,7 @@ public:
         DDC10DECIMATE, DDC8DECIMATE, DDC4DECIMATE, BURST
     } DDCDECIMATETYPE;
 
-    /// Constructor.
+    /// @brief Constructor.
     /// @param boardNum The board number. Use ok() to verify successful construction.
     /// @param dmaBufferSize The size of the DMA buffers. One interrupt will occur for
     /// this many bytes.
@@ -86,7 +86,7 @@ public:
     /// Destructor.
     virtual ~p7142sd3c();
     
-    /// Construct and add a downconverter for one of our receiver channels.
+    /// @brief Construct and add a downconverter for one of our receiver channels.
     /// @param chanId The channel identifier (0-3)
     /// @param burstSampling Set true if burst sampling should be used for this 
     ///     channel. Burst sampling implies that gates will be as short as the 
@@ -120,145 +120,164 @@ public:
             int simWaveLength = 5000,
             bool internalClock = false);
     
-    /// Stop the DMA for a specified downconverter
+    /// @brief Stop the DMA for a specified downconverter
     /// @param chan The desired channel
     void stopDMA(int chan);
 
+    /// @brief Return the ADC clock frequency in Hz.
     /// @return The ADC clock frequency in Hz.
     double adcFrequency() const {
         return _adc_clock;
     }
     
-    /// Convert a time in seconds to integer timer counts, which are in units
+    /// @brief Convert a time in seconds to integer timer counts, which are in units
     /// of (2 / _adc_clock).
     /// @ param time the time to be converted, in seconds
     /// @ return the time in integer timer counts, which are in units of
     /// (2 / _adc_clock) seconds.
     int timeToCounts(double time) const;
     
-    /// Convert a time in (2 / _adc_clock) integer timer counts to
+    /// @brief Convert a time in (2 / _adc_clock) integer timer counts to
     /// a time in seconds.
     /// @ param time the time to be converted, in (2 / _adc_clock) counts.
     /// @ return the time in seconds.
     double countsToTime(int counts) const;
     
-    /// Start or stop the 8 SD3C timers. If starting the timers, actual timer
+    /// @brief Start or stop the 8 SD3C timers.
+    ///
+    /// If starting the timers, actual timer
     /// start will occur at the next trigger event (which may be internal or
     /// external, depending on the setting of externalStartTrigger at 
     /// construction.
     /// @param start Set true to start, set false to stop.
     void timersStartStop(bool start);
     
+    /// @brief Return the time of the first transmit pulse.
     /// @return Time of first transmit pulse
     boost::posix_time::ptime xmitStartTime() const {
         return _xmitStartTime;
     }
 
+    /// @brief Return the first PRT, in seconds.
     /// @return The first PRT, in seconds
     double prt() const {
         return countsToTime(_prtCounts);
     }
     
+    /// @brief Return the first PRT, in units of (2 / adcFrequency())
     /// @return The first PRT, in units of (2 / adcFrequency())
     unsigned int prtCounts() const {
         return _prtCounts;
     }
     
+    /// @brief Return the second PRT, in seconds. Return zero if not
+    /// running with staggered PRT.
     /// @return The second PRT, in seconds, or zero if not running staggered
     /// PRT.
     double prt2() const {
         return countsToTime(_prt2Counts);
     }
     
+    /// @brief Return the second PRT, in units of (2 / adcFrequency()), or
+    ///     zero if not running staggered PRT.
     /// @return The second PRT, in units of (2 / adcFrequency()), or
     ///     zero if not running staggered PRT.
     unsigned int prt2Counts() const {
         return(_staggeredPrt ? _prt2Counts : 0);
     }
     
-    /// Set the time of the first transmit pulse.
+    /// @brief Set the time of the first transmit pulse.
     /// @param startTime The boost::posix_time::ptime of the first transmit
     ///    pulse.
     void setXmitStartTime(boost::posix_time::ptime startTime) {
         _xmitStartTime = startTime;
     }
-    /// Read the ttl input lines from the fpga
+    /// @brief Read the ttl input lines from the fpga
     /// @return The input line values.
     unsigned short int TTLIn();
 
-    /// Set the ttl output lines on the FPGA.
+    /// @brief Set the ttl output lines on the FPGA.
     /// @param data The value to be written.
     void TTLOut(unsigned short int data);
 
+    /// @brief Return the DDC type instantiated in our card's firmware
     /// @return the DDC type instantiated in our card's firmware
     DDCDECIMATETYPE ddcType();
     
+    /// @brief Return the name of the firmware DDC type
     /// @return the name of the firmware DDC type
     std::string ddcTypeName() const;
     
+    /// @brief Return the name of the given DDCDECIMATETYPE
     /// @return the name of the given DDCDECIMATETYPE
     static std::string ddcTypeName(DDCDECIMATETYPE type);
 
-    /// Set the filter start bit, which starts the data flow for all channels.
+    /// @brief Set the filter start bit, which starts the data flow for all channels.
     void startFilters();
 
-    /// Stop the filters
+    /// @brief Stop the filters
     void stopFilters();
     
-    /// The transmit pulse width, in seconds
+    /// @brief Return the transmit pulse width, in seconds
     /// @return the transmit pulse width, in seconds
     double txPulseWidth() const;
     
-    /// Return the transmit pulse width, in local counts, which are units of 
+    /// @brief Return the transmit pulse width, in local counts, which are units of
     /// (2 / adc_freq) seconds.
     int txPulseWidthCounts() const;
     
-    /// Set up general purpose timer 0. This timer is not used internally by
+    /// @brief Set up general purpose timer 0. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer0(double delay, double width, bool invert = false);
     
-    /// Set up general purpose timer 1. This timer is not used internally by
+    /// @brief Set up general purpose timer 1. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer1(double delay, double width, bool invert = false);
     
-    /// Set up general purpose timer 2. This timer is not used internally by
+    /// @brief Set up general purpose timer 2. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     /// @param invert true if the timer output should be inverted
     void setGPTimer2(double delay, double width, bool invert = false);
     
-    /// Set up general purpose timer 3. This timer is not used internally by
+    /// @brief Set up general purpose timer 3. This timer is not used internally by
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
     void setGPTimer3(double delay, double width, bool invert = false);
     
-    /// Return the number of gates being sampled by our non-burst downconverters.
+    /// @brief Return the number of gates being sampled by our non-burst downconverters.
     /// @return the number of gates being sampled by our non-burst 
     ///     downconverters
     unsigned int gates() const;
     
-    /// Return the number of pulses to sum for coherent integration, used by
-    /// all of our non-burst downconverters. It represents the number of
+    /// @brief Return the number of pulses to sum for coherent integration, used by
+    /// all of our non-burst downconverters.
+    ///
+    /// It represents the number of
     /// beams which go into an even beam accumulation, and likewise the
     /// number of beams which go into an odd beam accumulation.
     /// If nsum == 1, coherent integration is disabled.
     unsigned int nsum() const;
     
+    /// @brief Return the expected data bandwidth from a (non-burst) receiver channel
+    /// in bytes per second
     /// @return The expected data bandwidth from a (non-burst) receiver channel 
     /// in bytes per second
     int dataRate();
 
+    /// @brief Return the time of the given transmit pulse.
     /// @return Time of the given transmit pulse.
     boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart) const;
     
+    /// @brief Return the closest pulse number to a given time.
     /// @return The closest pulse number to a given time.
     int64_t pulseAtTime(boost::posix_time::ptime time) const;
     

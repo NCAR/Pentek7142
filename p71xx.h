@@ -139,7 +139,8 @@ struct DmaHandlerData {
 
 		public:
 			/// Constructor,
-			/// @param The board number.
+			/// @param boardNum The board number.
+		    /// @param dmabufsize DMA buffer size to use.
             /// @param simulate Set true if we operate in simulation mode.
 			p71xx(int boardNum, int dmabufsize = DMABUFSIZE, bool simulate=false);
 			/// Destructor.
@@ -207,13 +208,15 @@ struct DmaHandlerData {
             int adcRead(int chan, char* buf, int bytes);
             /// Write to the selected memory bank.
             /// @param bank The selected bank -  0, 1 or 2
-            /// The bytes to be written.
+            /// @param buf Pointer to the buffer of bytes to be written.
+            /// @param bytes The number of bytes to write.
             /// @return The number of bytes written. If an error occurs,
             /// minus one will be returned.
             int memWrite(int bank, int32_t* buf, int bytes);
             /// Read from the selected memory bank.
             /// @param bank The selected bank -  0, 1 or 2
             /// @param buf The data will be returned here.
+            /// @param bytes The number of bytes to read.
             /// memwrite() will resize the vector as required.
             /// @return The number of bytes read. If an error occurs,
             /// minus one will be returned.

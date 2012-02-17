@@ -56,12 +56,12 @@ void memReadDmaIntHandler(PVOID               hDev,
 /// DMA interrupts are cleared by the Kernel Device Driver.
 ///
 /// DMA interrupts are enabled when this routine is executed.
-/// @param hDev The 7142 Device Handle
-/// @param dmaChannel - DMA channel generating the interrupt(0-3)
+/// @param hDev The DMA handle for the source channel
+/// @param dmaChannel - number of the DMA channel generating the interrupt(0-3)
 /// @param pData - Pointer to user defined data
 /// @param pIntResults - Pointer to the interrupt results structure
 void adcDmaIntHandler(
-		PVOID hDev,
+		PVOID dmaHandle,
 		unsigned int dmaChannel,
 		PVOID pData,
         PTK714X_INT_RESULT *pIntResult)
@@ -134,9 +134,9 @@ p71xx::adcDmaInterrupt(int chan) {
 	/// @todo this logic needs to be refactored so that there is no dynamic allocation
 	/// happening during dma interrrupts.
 	std::vector<char> data;
-	data.resize(_dmaBufSize);
 
 	/// Copy the data into the vector
+    data.resize(_dmaBufSize);
 	memcpy(&data[0], (char*)_adcDmaBuf[chan].usrBuf + _chainIndex[chan]*_dmaBufSize, _dmaBufSize);
 
 	// lock access to the circular buffer and copy dma data to it
@@ -173,11 +173,9 @@ p71xx::adcRead(int chan, char* buf, int bytes) {
 	// to satisfy this request.
 	while (_readBufAvail[chan] < bytes) {
 		{
-			// move unused data to the front of the buffer
-			for (int i = 0; i < _readBufAvail[chan]; i++) {
-				int j = _readBufOut[chan] + i;
-				_readBuf[chan][i] = _readBuf[chan][j];
-			}
+            // move unused data to the front of the buffer
+            char * rbData = &_readBuf[chan][0];
+		    memcpy(rbData, rbData + _readBufOut[chan], _readBufAvail[chan]);
 			_readBufOut[chan] = 0;
 			// block until we have at least one dma buffer available
 			// in the circular buffer. Note that unique_lock
@@ -191,10 +189,8 @@ p71xx::adcRead(int chan, char* buf, int bytes) {
 
 			// At least one buffer is available in the circular buffer,
 			// Transfer the data to _readBuf
-			for (int i = 0; i < _dmaBufSize; i++) {
-				int j = _readBufAvail[chan] + i;
-				_readBuf[chan][j] = _circBufferList[chan][0][i];
-			}
+			char * cbData = &_circBufferList[chan][0][0];
+			memcpy(rbData + _readBufAvail[chan], cbData, _dmaBufSize);
 			_readBufAvail[chan] += _dmaBufSize;
 
 			//DUMP_BUF(_buffers[chan][0],  _dmaBufSize);
@@ -205,10 +201,8 @@ p71xx::adcRead(int chan, char* buf, int bytes) {
 	}
 
 	// copy requested bytes from _readBuf[chan] to the user buffer
-	for (int i = 0; i < bytes; i++) {
-		int j = _readBufOut[chan] + i;
-		buf[i] = _readBuf[chan][j];
-	}
+    char * rbData = &_readBuf[chan][0] + _readBufOut[chan];
+    memcpy(buf, rbData, bytes);
 
 	_readBufOut[chan]   += bytes;
 	_readBufAvail[chan] -= bytes;

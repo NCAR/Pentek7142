@@ -180,7 +180,7 @@ p7142Dn::usingInternalClock() const {
     uint32_t clkSel;
 
     P7142_GET_MSTR_BUS_CTRL_SEL_CLK(_p7142._p7142Regs.BAR2RegAddr.masterAControl, clkSel);
-    return (clkSel == P7142_MSTR_CTRL_SEL_CLK_EXT_CLK);
+    return (clkSel != P7142_MSTR_CTRL_SEL_CLK_EXT_CLK);
 
 }
 

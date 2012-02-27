@@ -22,6 +22,7 @@ p7142Dn::p7142Dn(
         bool internalClock):
   _p7142(*p7142),
   _chanId(chanId),
+  _bytesRead(0),
   _simWaveLength(simWaveLength),
   _angleCount(0),
   _sim4bytes(sim4bytes),
@@ -202,9 +203,10 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
     if (isSimulating())
         return true;
     
-    *_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide = (bypassdiv-1);
+    unsigned int newDecimDiv = bypassdiv - 1;
+    *_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide = newDecimDiv;
 
-    if (*_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide != (bypassdiv-1)) {
+    if (*_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoDecimationDivide != newDecimDiv) {
     	return false;
     }
 

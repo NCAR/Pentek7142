@@ -113,6 +113,9 @@ _dmaBufSize(dmabufsize)
 
 ////////////////////////////////////////////////////////////////////////////////////////
 p71xx::~p71xx() {
+	if (_simulate) {
+		return;
+	}
 
     boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
 
@@ -593,6 +596,9 @@ p71xx::enableGateGen() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p71xx::stop(int chan) {
+	if (_simulate) {
+		return;
+	}
 
 	if (chan < 0 || chan > 3) {
 		std::cerr << __FILE__ << ":" << __FUNCTION__ << ":" << " trying to stop illegal adc channel "

@@ -1,4 +1,6 @@
 #include "p7142.h"
+#include "p7142Dn.h"
+#include "p7142Up.h"
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <iostream>

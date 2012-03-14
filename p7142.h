@@ -2,8 +2,6 @@
 #define P7142_H_
 
 #include "p71xx.h"
-#include "p7142Dn.h"
-#include "p7142Up.h"
 #include "DDCregisters.h"
 
 #include <iostream>

@@ -3,19 +3,15 @@
 
 #include <string>
 #include <boost/thread/recursive_mutex.hpp>
+#include "p7142.h"
 
 namespace Pentek {
-class p7142;
 
 /// @brief A p7142 downconverter.
 /// This class reads and controls downconversion for one receiver channel of a
 /// P7142 transceiver card.
 class p7142Dn {
     public:
-    // Class p7142 is a friend; the intention is that construction of
-    // p7142Dn will happen only from there...
-    friend class p7142;
-
     /// Constructor
     /// @param p7142 a pointer to the owner p7142 object
     /// @param chanId The channel identifier (used to select /dn/*B)
@@ -71,7 +67,7 @@ class p7142Dn {
         /// Are we simulating existence of a real P7142 card?
         /// @return true iff we are simulating a P7142 card rather than using
         /// a real one.
-        bool isSimulating() const;
+        bool isSimulating() const { return _p7142.isSimulating(); }
         
 
     protected:

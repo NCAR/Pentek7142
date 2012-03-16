@@ -6,6 +6,9 @@
 #include <sys/ioctl.h>
 #include <cerrno>
 #include <cmath>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
 
 using namespace boost::posix_time;
 
@@ -676,9 +679,17 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
     unsigned int chan, pulseNum;
     unpackPtChannelAndPulse(pulseTag, chan, pulseNum);
     if (int(chan) != _chanId) {
-        std::cerr << "p7142sd3cdnThread for channel " << _chanId <<
-                " got data for channel " << chan << "!" << std::endl;
-        abort();
+        std::ostringstream msgStream;
+        msgStream << std::setfill('0');
+        msgStream << "On channel " << chan << ", got BAD pulse tag 0x" << 
+            std::hex << std::setw(8) << pulseTag << " after pulse tag 0x" <<
+            std::setw(8) << (uint32_t(_chanId) << 30 | _lastPulse) << 
+            std::dec << ". Pulse number will just be incremented.\n";
+        std::cerr << msgStream.str();
+
+        // Just hijack the next pulse number, since we've got garbage for
+        // the pulse anyway...
+        pulseNum = _lastPulse + 1;
     }
 
     // Initialize _lastPulse if this is the first pulse we've seen
@@ -687,17 +698,15 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
         _firstBeam = false;
     }
 
+    // Handle pulse number rollover gracefully
+    if (_lastPulse == MAX_PT_PULSE_NUM) {
+        std::cout << "Pulse number rollover on channel " << chanId() << std::endl;
+        _lastPulse = -1;
+    }
+
     // How many pulses since the last one we saw?
     int delta = pulseNum - _lastPulse;
     if (delta < (-MAX_PT_PULSE_NUM / 2)) {
-        // if the new pulse number is zero, assume that it
-        // was a legitimate wrap. Unfortunately this won't catch
-        // errors where the zero pulse is skipped, or a pulse comes in
-        // that erroneously has zero for a pulse tag. Perhaps there
-        // is a better algorithm for this.
-        if (pulseNum == 0)
-            std::cout << "Pulse number rollover" << std::endl;
-
         delta += MAX_PT_PULSE_NUM + 1;
     }
 
@@ -706,14 +715,14 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
                 pulseNum << "!" << std::endl;
         abort();
     } else if (delta != 1) {
-        // std::cerr << _lastPulse << "->" << pulseNum << ": ";
-        if (delta < 0) {
-            //std::cerr << "Channel " << _chanId << " went BACKWARD " <<
-            //    -delta << " pulses" << std::endl;
-        } else {
-            // std::cerr << "Channel " << _chanId << " dropped " <<
-            //    delta - 1 << " pulses" << std::endl;
-        }
+//        std::cerr << _lastPulse << "->" << pulseNum << ": ";
+//        if (delta < 0) {
+//            std::cerr << "Channel " << _chanId << " went BACKWARD " <<
+//                -delta << " pulses" << std::endl;
+//        } else {
+//            std::cerr << "Channel " << _chanId << " dropped " <<
+//                delta - 1 << " pulses" << std::endl;
+//        }
     }
 
     _nPulsesSinceStart += delta;
@@ -729,41 +738,105 @@ char*
 p7142sd3cDn::ptBeam(char* pulseTag) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
+	// How many sync errors at start?
+    unsigned long startSyncErrors = _syncErrors;
+
+    // Number of bytes for a complete beam: data size (i.e., _beamLength) +
+    // 4 byte pulse tag + 4-byte sync word
+    const uint32_t BytesPerBeam = _beamLength + 8;
+
+    // Temporary buffer to hold the 4-byte pulse tag, _beamLength bytes of data,
+    // and the trailing sync word.
+    char tmpBuf[BytesPerBeam];
+
+    // Keep track of how many useful bytes are currently in tmpBuf.
+    int nInTmp = 0;
+    
     int r;
     while(1) {
         if (_firstRawBeam) {
             // skip over the first 4 bytes, assuming that
             // they are a good sync word.
-            r = read(_buf, 4);
+            r = read(tmpBuf, 4);
             assert(r == 4);
             _firstRawBeam = false;
         }
 
-        // read pulse number
-        r = read(pulseTag, 4);
-        assert(r == 4);
+        // Read the 4-byte pulse tag, IQ beam data, and 4-byte sync word into
+        // tmpBuf (_beamLength + 8 bytes). Generally, we will the full length 
+        // here, but we may read fewer if we still have data in tmpBuf after 
+        // hunting for a sync word (see below).
+        int nToRead = BytesPerBeam - nInTmp;
+        r = read(tmpBuf + nInTmp, nToRead);
+        assert(r == nToRead);
+        
+        nInTmp = BytesPerBeam;
 
-        // read one beam of IQ data into buf
-        r = read(_buf, _beamLength);
-        assert(r == (_beamLength));
+        // Copy out the pulse tag from the beginning, the data bytes from the
+        // middle, and (what should be) the sync word from the end.
+        memcpy(pulseTag, tmpBuf, 4);
+        
+        memcpy(_buf, tmpBuf + 4, _beamLength);
 
-        // read the next sync word
-        uint32_t sync;
-        r = read(reinterpret_cast<char*>(&sync), 4);
-        assert(r == 4);
+        uint32_t word;
+        memcpy(&word, tmpBuf + BytesPerBeam - 4, 4);
 
         // If we are indeed in sync, return the good pulse data now
-        if (sync == SD3C_SYNCWORD)
-            return _buf;
+        if (word == SD3C_SYNCWORD) {
+            break;
+        }
             
         // No sync? Hunt word-by-word until we find a sync word, then go 
-        // back to the top
+        // back to the top. Start looking in the stuff we already read, then
+        // read beyond that if necessary.
         _syncErrors++;
-        while (sync != SD3C_SYNCWORD) {
-            r = read(reinterpret_cast<char*>(&sync), 4);
-            assert(r == 4);
+
+
+        uint32_t nHuntWords = 0;
+        
+        while (true) {
+            // If we still have data that we read above, search through it
+            // looking for the sync word. If we run out of previously read
+            // data, then read in one new word at a time.
+            if (nHuntWords < (BytesPerBeam / 4)) {
+                memcpy(&word, tmpBuf + nHuntWords * 4, 4);
+            } else {
+                r = read(reinterpret_cast<char*>(&word), 4);
+                assert(r == 4);
+            }
+            nHuntWords++;
+
+			// Break out when we've found a sync word
+            if (word == SD3C_SYNCWORD) {
+                // Keep any remaining bytes after the sync word in tmpBuf,
+                // moving them to the beginning of tmpBuf.
+                if (4 * nHuntWords < sizeof(tmpBuf)) {
+                    memmove(tmpBuf, tmpBuf + 4 * nHuntWords, 
+                            BytesPerBeam - 4 * nHuntWords);
+                    nInTmp -= 4 * nHuntWords;
+                } else {
+                    nInTmp = 0;
+                }
+                // Break out, since we found a sync word
+                break;
+            }
         }
+        
+        std::cerr << "Skipped " << nHuntWords - 1 << 
+            " non-SYNC words on chan " << _chanId << " to find next SYNC. " << 
+            std::endl;
     }
+
+    if (_syncErrors != startSyncErrors) {
+        uint32_t * wordp = reinterpret_cast<uint32_t *>(pulseTag);
+        std::cerr << std::setfill('0');
+        std::cerr << "XX " << _syncErrors - startSyncErrors << 
+            " sync errors on channel " << chanId() << 
+            " finding pulse w/tag 0x" << std::setw(8) << std::hex << *wordp << 
+            " after tag 0x" << std::setw(8) << 
+            (uint32_t(_chanId) << 30 | _lastPulse) << std::dec << std::endl;
+    }
+    return _buf;
 }
 
 //////////////////////////////////////////////////////////////////////////////////

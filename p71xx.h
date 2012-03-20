@@ -18,13 +18,13 @@ std::cout << std::dec << std::endl; \
 #include "math.h"
 #include <string>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <semaphore.h>
-#include <signal.h>
+#include <csignal>
 #include <vector>
-#include <boost/circular_buffer.hpp>
+#include <queue>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition.hpp>
 
@@ -44,7 +44,7 @@ namespace Pentek {
 /// The size of the dma transfers from the Pentek to user space.
 /// This determines the size of the buffers that the DMA transfers
 /// are collected in, and the size of the pending read buffer.
-#define DMABUFSIZE 65536
+static const int DEFAULT_DMABUFSIZE = 65536;
 
 class p71xx;
 
@@ -142,7 +142,8 @@ struct DmaHandlerData {
 			/// @param boardNum The board number.
 		    /// @param dmabufsize DMA buffer size to use.
             /// @param simulate Set true if we operate in simulation mode.
-			p71xx(int boardNum, int dmabufsize = DMABUFSIZE, bool simulate=false);
+			p71xx(int boardNum, int dmabufsize = DEFAULT_DMABUFSIZE, 
+			        bool simulate = false);
 			/// Destructor.
 			virtual ~p71xx();
 			/// @return true if the last operation was successful,
@@ -151,12 +152,13 @@ struct DmaHandlerData {
 			/// Return true iff we're in simulation mode.
 			/// @return true iff we're in simulation mode.
 			bool isSimulating() const { return _simulate; }
-			/// This routine is called from the ReadyFlow dma interrupt handler
+			/// @brief This routine is called from the ReadyFlow dma interrupt handler
 			/// adcDmaIntHandler(). It copies data from the dma interrupt buffer to the circular
 			/// buffer list. According to the ReadyFlow notes, dma interrupts are disabled
 			/// while dmaIntHandler() is executing, and so they will be disabled as well
 			/// while we are in this routine.
-            void adcDmaInterrupt(int chan);
+			/// @param chan the A/D channel with data available
+			void adcDmaInterrupt(int chan);
 			/// @todo Do we need to be calling these functions? It was done in the Linux driver and readyflow,
 			/// but they don't seem to do anything.
             void enableGateGen();
@@ -282,16 +284,18 @@ struct DmaHandlerData {
             bool _isReady;
             /// true if an AD channel is running
             bool _adcActive[4];
-            /// A circular list of buffers, filled from the dma transfers.
-            /// One list per channel.
-            boost::circular_buffer<std::vector<char> > _circBufferList[4];
-            /// A mutex used to control access to the circular buffer list,
-            /// which is filled during DMA interrupts and emptied by
-            /// read requests.
-            boost::mutex _circBufferMutex[4];
-            /// A condition variable that will activate when
-            /// the circular buffer list is non-empty.
-            boost::condition_variable _circBufferCond[4];
+            /// Queue of free buffers available to hold data read from DMA,
+            /// one queue per channel.
+            /// Each buffer will be of length _dmaBufSize;
+            std::queue<char*> _freeBuffers[4];
+            /// Queue of filled buffers, one per channel.
+            std::queue<char*> _filledBuffers[4];
+            /// Mutex to control access to _freeBuffers and _filledBuffers,
+            /// one per channel.
+            boost::mutex _bufMutex[4];
+            /// Condition variable which will activate when data are available
+            /// in _filledBuffers[chan]
+            boost::condition_variable _dataReadyCondition[4];
             /// This is a vector, one per channel, used for temporary
             /// storage to satisfy read requests. To avoid ongoing
             /// resizing, we allocate it to it's full length (2*_dmaBufSize).
@@ -302,16 +306,15 @@ struct DmaHandlerData {
             std::vector<char> _readBuf[4];
             /// The number of bytes available in the _readBuf.
             int _readBufAvail[4];
-            /// The next avaiable byte in _readBuf.
+            /// The next available byte in _readBuf.
             unsigned int _readBufOut[4];
             /// The number bytes to be transferred in each DMA transaction. Note
             /// that each Pentek channel can make use of up to four DMA buffers,
             /// filling them in a round-robin fashion.
-            int _dmaBufSize;
-            /// The number in the dma interrupt chain for each channel.
-            /// The chain is 4 buffers long, and then it wraps back.
-            int _chainIndex[4];
-
+            const int _dmaBufSize;
+            /// The next DMA descriptor to read for each channel.
+            /// The descriptor chain is 4 buffers long, and then it wraps back.
+            uint16_t _nextDesc[4];
 	};
 }
 

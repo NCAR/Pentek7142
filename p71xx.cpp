@@ -66,7 +66,11 @@ void adcDmaIntHandler(
 		PVOID pData,
         PTK714X_INT_RESULT *pIntResult)
 {
-
+    if (pIntResult->intLost > 0) {
+        std::cout << "On channel " << dmaChannel << " w/intLost = " <<
+            pIntResult->intLost << ", flag is 0x" << std::hex << 
+            pIntResult->intFlag << std::dec << std::endl;
+    }
 	// Cast the user data to DmaHandlerData*
 	DmaHandlerData* dmaData = (DmaHandlerData*) pData;
 
@@ -101,8 +105,13 @@ _dmaBufSize(dmabufsize)
 		_adcActive[chan] = false;
 		_readBufAvail[chan] = 0;
 		_readBufOut[chan] = 0;
-		_circBufferList[chan].set_capacity(100);
-		_readBuf[chan].resize(2*_dmaBufSize);
+		// Put a set of _dmaBufSize char buffers in the free buffer queue
+		// for this channel. These buffers are used when pulling data 
+        // from DMA.
+		for (int i = 0; i < 10; i++) {
+		    _freeBuffers[chan].push(new char[_dmaBufSize]);
+		}
+		_readBuf[chan].resize(2 * _dmaBufSize);
 	}
 
 	// initialize ReadyFlow
@@ -134,88 +143,121 @@ p71xx::~p71xx() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p71xx::adcDmaInterrupt(int chan) {
-	/// @todo this logic needs to be refactored so that there is no dynamic allocation
-	/// happening during dma interrrupts.
-	std::vector<char> data;
+    boost::lock_guard<boost::mutex> lock(_bufMutex[chan]);
+    std::ostringstream msgStream;
+    
+    // Find out which DMA descriptor buffer is currently being written. We can 
+    // read everything up to that buffer.
+    uint32_t currDmaDesc = 0;
+    PCI7142_GET_DMA_CURR_XFER_CNTR_CURR_DESCPRT(
+            _p7142Regs.BAR0RegAddr.dmaCurrXferCounter[chan], currDmaDesc);
+    
+    if (currDmaDesc == _nextDesc[chan]) {
+        msgStream << "ERROR! Channel " << chan << 
+            " wants to read descriptor " << _nextDesc[chan] << 
+            " while DMA is in progress there! Likely overrun!\n";
+        std::cerr << msgStream.str();
+        // Skip reading this descriptor, since the old data we want is being
+        // overwritten right now!
+        _nextDesc[chan] = (_nextDesc[chan] + 1) % 4;
+    }
 
-	/// Copy the data into the vector
-    data.resize(_dmaBufSize);
-	memcpy(&data[0], (char*)_adcDmaBuf[chan].usrBuf + _chainIndex[chan]*_dmaBufSize, _dmaBufSize);
+    // Read up to the descriptor buffer currently being written via DMA. When 
+    // things are running smoothly, we'll just read one buffer here, but 
+    // occasionally we may need to play catch up. As long as we are 3 or fewer 
+    // buffers behind, we should be OK...
+    int nBufsRead = 0;
+    while (_nextDesc[chan] != currDmaDesc) {
+        // Make sure we have a buffer available in _freeBuffers
+        if (_freeBuffers[chan].empty()) {
+            msgStream << "Dropping data on channel " << chan << 
+                ", no free buffers available!\n";
+            std::cerr << msgStream.str();
+            break;
+        }
 
-	// lock access to the circular buffer and copy dma data to it
-	{
-		boost::lock_guard<boost::mutex> lock(_circBufferMutex[chan]);
-		// put the vector in the circular buffer
-		_circBufferList[chan].push_back(data);
-	}
+        // Get the next free buffer and copy the data from DMA to the buffer
+        char * buf = _freeBuffers[chan].front();
+        _freeBuffers[chan].pop();
+        memcpy(buf, 
+                (char*)_adcDmaBuf[chan].usrBuf + _nextDesc[chan] * _dmaBufSize, 
+                _dmaBufSize);
+        nBufsRead++;
+        
+        // Add the buffer to the filled buffers queue
+        _filledBuffers[chan].push(buf);
+    
+        // Use the condition variable to tell data consumer (i.e. adcRead())
+        // that new data are available.
+        _dataReadyCondition[chan].notify_one();
+    
+        // Move to the next descriptor in the DMA chain
+        _nextDesc[chan] = (_nextDesc[chan] + 1) % 4;
+    }
+    
+    // Whine a little if we read more than one buffer in this call.
+    if (nBufsRead > 1) {
+        msgStream.clear();
+        msgStream << "On channel " << chan << ", read " << nBufsRead << 
+            " DMA buffers at once\n";
+        std::cerr << msgStream.str();
+    }
 
-	// use the condition variable to tell data consumer (i.e. read())
-	// that new data are avaialble.
-	_circBufferCond[chan].notify_one();
-
-	// move to the next buffer in the dma chain
-	_chainIndex[chan]++;
-	if (_chainIndex[chan] == 4) {
-		_chainIndex[chan] = 0;
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 int
 p71xx::adcRead(int chan, char* buf, int bytes) {
 
-	// this is where it all happens
+    // this is where it all happens
 
-	// _pendingReadBuf[chan] has room for 2*_dmaBufSize, so a read request
-	// cannot ask for more than half of this, since we may need to
-	// append one of the data blocks from the circular buffer list
-	// to fillBuffers[chan].
-	assert(bytes <= _dmaBufSize);
+    // _readBuf[chan] has room for 2*_dmaBufSize, so a read request
+    // cannot ask for more than half of this, since we may need to
+    // append one of the data blocks from the circular buffer list
+    // to fillBuffers[chan].
+    assert(bytes <= _dmaBufSize);
 
-	// Wait until there are enough bytes in _fillBuffers[chan]
-	// to satisfy this request.
-	while (_readBufAvail[chan] < bytes) {
-		{
-            // move unused data to the front of the buffer
-            char * rbData = &_readBuf[chan][0];
-		    memcpy(rbData, rbData + _readBufOut[chan], _readBufAvail[chan]);
-			_readBufOut[chan] = 0;
-			// block until we have at least one dma buffer available
-			// in the circular buffer. Note that unique_lock
-			// releases the lock when it goes out of scope.
-			boost::unique_lock<boost::mutex> lock(_circBufferMutex[chan]);
-			while (_circBufferList[chan].size() == 0) {
-				_circBufferCond[chan].wait(lock);
-			}
-			// assert that we will not overrun _fillBuffer
-			assert(_readBufAvail[chan]+_dmaBufSize <= 2*_dmaBufSize);
+    // If we need more data, grab a buffer from _filledBuffers[chan], waiting
+    // for it if necessary.
+    while (_readBufAvail[chan] < bytes) {
+        // move unconsumed data to the front of _readBuf
+        char * rbData = &_readBuf[chan][0];
+        memmove(rbData, rbData + _readBufOut[chan], _readBufAvail[chan]);
+        _readBufOut[chan] = 0;
 
-			// At least one buffer is available in the circular buffer,
-			// Transfer the data to _readBuf
-			char * cbData = &_circBufferList[chan][0][0];
-			memcpy(rbData + _readBufAvail[chan], cbData, _dmaBufSize);
-			_readBufAvail[chan] += _dmaBufSize;
+        // Block until we have at least one filled buffer available
+        // Note that unique_lock releases the lock when it goes out of scope.
+        boost::unique_lock<boost::mutex> lock(_bufMutex[chan]);
+        while (_filledBuffers[chan].size() == 0) {
+            _dataReadyCondition[chan].wait(lock);
+        }
+        // assert that we will not overrun _readBuf
+        assert(_readBufAvail[chan] + _dmaBufSize <= 2 * _dmaBufSize);
+        
+        char *buf = _filledBuffers[chan].front();
+        _filledBuffers[chan].pop();
+        
+        // Copy the next filled buffer into _readBuf
+        memcpy(rbData + _readBufAvail[chan], buf, _dmaBufSize);
+        _readBufAvail[chan] += _dmaBufSize;
+        
+        // Put the buffer back on the free list
+        _freeBuffers[chan].push(buf);
+    }
 
-			//DUMP_BUF(_buffers[chan][0],  _dmaBufSize);
-
-			// and remove it from the circular buffer
-			_circBufferList[chan].pop_front();
-		}
-	}
-
-	// copy requested bytes from _readBuf[chan] to the user buffer
+    // copy requested bytes from _readBuf[chan] to the user buffer
     char * rbData = &_readBuf[chan][0] + _readBufOut[chan];
     memcpy(buf, rbData, bytes);
 
-	_readBufOut[chan]   += bytes;
-	_readBufAvail[chan] -= bytes;
+    _readBufOut[chan]   += bytes;
+    _readBufAvail[chan] -= bytes;
 
-	//DUMP_BUF(buf, bytes);
+    //DUMP_BUF(buf, bytes);
 
-	// assert that we don't have a math logic error
-	assert(_readBufAvail[chan] >=0);
+    // assert that we don't have a math logic error
+    assert(_readBufAvail[chan] >=0);
 
-	return bytes;
+    return bytes;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -426,12 +468,12 @@ void p71xx::configDmaParameters() {
 		/// <br> They don't say what "hang up" means.
 		for (int d = 0; d < 4; d++) {
 			P7142DmaDescptrSetup(
-			&(_p7142DmaParams.dmaChan[chan]),
-			d,                                                     /* descriptor number */
-			_dmaBufSize,                                           /* transfer count in bytes */
-			PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
-			PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
-			(unsigned long)_adcDmaBuf[chan].kernBuf+d*_dmaBufSize);    /* buffer address */
+			        &(_p7142DmaParams.dmaChan[chan]),
+			        d,                                                     /* descriptor number */
+			        _dmaBufSize,                                           /* transfer count in bytes */
+			        PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
+			        PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
+			        (unsigned long)_adcDmaBuf[chan].kernBuf + d * _dmaBufSize);    /* buffer address */
 		}
 
 		/* flush FIFO */
@@ -442,7 +484,7 @@ void p71xx::configDmaParameters() {
 		PTK714X_DMASyncCpu(&_adcDmaBuf[chan]);
 
 		// initialize the dma chain index
-		_chainIndex[chan] = 0;
+		_nextDesc[chan] = 0;
 
 		// Initialize the data that will be delivered to the dma interrupt handler
 		_adcDmaHandlerData[chan].chan  = chan;

@@ -575,34 +575,6 @@ int p7142sd3c::dataRate() {
 }
 
 //////////////////////////////////////////////////////////////////////
-ptime p7142sd3c::timeOfPulse(int64_t nPulsesSinceStart) const {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
-
-    // Figure out offset since transmitter start based on the pulse
-    // number and PRT(s).
-    double offsetSeconds;
-    if (_staggeredPrt) {
-        unsigned long prt1Count = nPulsesSinceStart / 2 + nPulsesSinceStart % 2;
-        unsigned long prt2Count = nPulsesSinceStart / 2;
-        offsetSeconds =  prt1Count / _prf + prt2Count / _prf2;
-    } else {
-        offsetSeconds = nPulsesSinceStart / _prf;
-    }
-    
-    // Convert subseconds to boost::posix_time::time_duration "ticks"
-    double subseconds = fmod(offsetSeconds, 1.0);
-    int fractionalSeconds = (int)(subseconds * time_duration::ticks_per_second());
-    
-    // Now construct a boost::posix_time::time_duration from the seconds and
-    // fractional seconds
-    time_duration offset(0, 0, long(offsetSeconds), fractionalSeconds);
-    
-    // Finally, add the offset to the _xmitStartTime to get the absolute
-    // pulse time
-    return(_xmitStartTime + offset);
-}
-
-//////////////////////////////////////////////////////////////////////
 int64_t p7142sd3c::pulseAtTime(ptime time) const {
     boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
     

@@ -275,7 +275,33 @@ public:
 
     /// @brief Return the time of the given transmit pulse.
     /// @return Time of the given transmit pulse.
-    boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart) const;
+    /// This method is inlined because it gets called a lot, and removing the call 
+    /// overhead helps things noticeably.
+    inline boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart) const {
+        // Figure out offset since transmitter start based on the pulse
+        // number and PRT(s).
+        double offsetSeconds;
+        if (_staggeredPrt) {
+            unsigned long prt1Count = nPulsesSinceStart / 2 + nPulsesSinceStart % 2;
+            unsigned long prt2Count = nPulsesSinceStart / 2;
+            offsetSeconds =  prt1Count / _prf + prt2Count / _prf2;
+        } else {
+            offsetSeconds = nPulsesSinceStart / _prf;
+        }
+
+        // Convert subseconds to boost::posix_time::time_duration "ticks"
+        double subseconds = fmod(offsetSeconds, 1.0);
+        int fractionalSeconds = 
+            (int)(subseconds * boost::posix_time::time_duration::ticks_per_second());
+
+        // Now construct a boost::posix_time::time_duration from the seconds and
+        // fractional seconds
+        boost::posix_time::time_duration offset(0, 0, long(offsetSeconds), fractionalSeconds);
+
+        // Finally, add the offset to the _xmitStartTime to get the absolute
+        // pulse time
+        return(_xmitStartTime + offset);
+    }
     
     /// @brief Return the closest pulse number to a given time.
     /// @return The closest pulse number to a given time.

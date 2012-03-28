@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cstdio>
 #include <cstdlib>
+#include <csignal>
 
 
 using namespace Pentek;
@@ -180,7 +181,7 @@ p71xx::adcDmaInterrupt(int chan) {
         char * buf = _freeBuffers[chan].front();
         _freeBuffers[chan].pop();
         memcpy(buf, 
-                (char*)_adcDmaBuf[chan].usrBuf + _nextDesc[chan] * _dmaBufSize, 
+                (char*)_adcDmaBuf[chan][_nextDesc[chan]].usrBuf, 
                 _dmaBufSize);
         nBufsRead++;
         
@@ -435,13 +436,18 @@ void p71xx::configDmaParameters() {
 			std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
 			abort();
 		}
-		// allocate DMA buffers, one per channel. All descriptors
-		// for the channel will use consecutive areas in this buffer
-		status = PTK714X_DMAAllocMem(_adcDmaHandle[chan], _dmaBufSize*4, &_adcDmaBuf[chan], (BOOL)0);
-		if (status != PTK714X_STATUS_OK) {
-			std::cerr << __PRETTY_FUNCTION__ << ": Unable to allocate a DMA buffer for channel " << chan << std::endl;
-			abort();
-		}
+		// allocate DMA buffers, one per channel/descriptor pair.
+        for (int d = 0; d < 4; d++) {
+		    status = PTK714X_DMAAllocMem(_adcDmaHandle[chan], _dmaBufSize, 
+		            &_adcDmaBuf[chan][d], (BOOL)0);
+            if (status != PTK714X_STATUS_OK) {
+                std::cerr << __PRETTY_FUNCTION__ << 
+                    ": Unable to allocate a DMA buffer for channel " << chan << 
+                    "/descriptor " << d << std::endl;
+                // Exit via INT signal, in hopes that cleanup will occur
+                raise(SIGINT);
+            }
+        }
 
 		/* Abort any existing transfers */
 		P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), chan);
@@ -473,7 +479,7 @@ void p71xx::configDmaParameters() {
 			        _dmaBufSize,                                           /* transfer count in bytes */
 			        PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
 			        PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
-			        (unsigned long)_adcDmaBuf[chan].kernBuf + d * _dmaBufSize);    /* buffer address */
+			        (unsigned long)_adcDmaBuf[chan][d].kernBuf);    /* buffer address */
 		}
 
 		/* flush FIFO */
@@ -481,7 +487,9 @@ void p71xx::configDmaParameters() {
 					   &(_p7142InParams.adcFifo[chan]));
 
 		/* Flush the CPU caches */
-		PTK714X_DMASyncCpu(&_adcDmaBuf[chan]);
+		for (int desc = 0; desc < 4; desc++) {
+		    PTK714X_DMASyncCpu(&_adcDmaBuf[chan][desc]);
+		}
 
 		// initialize the dma chain index
 		_nextDesc[chan] = 0;
@@ -670,10 +678,12 @@ p71xx::stop(int chan) {
 				": DMA interrupt disable failed" << std::endl;
 	}
 
-	status = PTK714X_DMAFreeMem(_adcDmaHandle[chan], &_adcDmaBuf[chan]);
-	if (status != PTK714X_STATUS_OK) {
-		std::cerr << __FILE__ << ":" << __FUNCTION__ <<
-		   ": DMA memory free failed" << std::endl;
+	for (int desc = 0; desc < 4; desc++) {
+        status = PTK714X_DMAFreeMem(_adcDmaHandle[chan], &_adcDmaBuf[chan][desc]);
+        if (status != PTK714X_STATUS_OK) {
+            std::cerr << __FILE__ << ":" << __FUNCTION__ <<
+               ": DMA memory free failed" << std::endl;
+        }
 	}
 
 	status = PTK714X_DMAClose(_deviceHandle, _adcDmaHandle[chan]);

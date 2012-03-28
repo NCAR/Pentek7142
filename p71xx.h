@@ -241,8 +241,9 @@ struct DmaHandlerData {
             void* _deviceHandle;
             /// ReadyFlow dma handles, one per channel
             PTK714X_DMA_HANDLE*   _adcDmaHandle[4];
-            /// ReadyFlow dma buffer address pointers, in user space
-            PTK714X_DMA_BUFFER    _adcDmaBuf[4];
+            /// ReadyFlow dma buffer address pointers, dimensioned by
+            /// ADC channel and DMA descriptor
+            PTK714X_DMA_BUFFER    _adcDmaBuf[4][4];
             /// ReadyFlow user data. A pointer to these will be passed into
             /// dmaIntHandler().
             DmaHandlerData        _adcDmaHandlerData[4];

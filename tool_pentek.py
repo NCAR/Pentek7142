@@ -19,7 +19,6 @@ env = Environment(tools = ['default'] + tools)
 variables.Update(env)
 
 libsources = Split("""
-p71xx.cpp
 p7142.cpp
 p7142Dn.cpp
 p7142Up.cpp
@@ -38,7 +37,6 @@ p7142Dn.h
 p7142Up.h
 p7142sd3c.h
 p7142sd3cDn.h
-p71xx.h
 BuiltinFilters.h
 BuiltinGaussian.h
 BuiltinKaiser.h

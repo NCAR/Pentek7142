@@ -30,7 +30,7 @@ p7142sd3c::p7142sd3c(int boardNum, int dmaBufferSize, bool simulate, double tx_d
         _nsum(nsum),
         _simulateDDCType(simulateDDCType),
         _externalStartTrigger(externalStartTrigger) {
-	boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     // sanity check
     if (_nsum < 1) {
@@ -139,7 +139,7 @@ p7142sd3c::p7142sd3c(int boardNum, int dmaBufferSize, bool simulate, double tx_d
     // reset the FPGA clock managers. Necessary since some of our
     // new DCMs in the firmware use the CLKFX output, which won't
     // lock at startup.
-    resetDCM();
+    _resetDCM();
 
     // set free run mode as appropriate
     loadFreeRun();
@@ -155,7 +155,7 @@ p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
         double rx_delay, double rx_pulse_width, std::string gaussianFile, 
         std::string kaiserFile, double simPauseMs, int simWavelength,
         bool internalClock) {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     // Create a new p7142sd3cDn downconverter and put it in our list
     p7142sd3cDn* downconverter = new p7142sd3cDn(
@@ -171,7 +171,7 @@ p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
 			simWavelength,
 			internalClock);
 
-    p7142::addDownconverter(downconverter);
+    p7142::_addDownconverter(downconverter);
 
     return(downconverter);
 }
@@ -182,7 +182,7 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
 
     _TimerConfig currentVals = _timerConfigs[ndx];
 
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     // If current timer width is non-zero, warn about any changes in 
     // width or delay.
@@ -205,7 +205,7 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142sd3c::timeToCounts(double time) const {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     return(lround(time * _adc_clock / 2));
 }
@@ -213,14 +213,14 @@ p7142sd3c::timeToCounts(double time) const {
 //////////////////////////////////////////////////////////////////////////////////
 double
 p7142sd3c::countsToTime(int counts) const {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     return((2 * counts) / _adc_clock);
 }
 
 /////////////////////////////////////////////////////////////////////////
 void p7142sd3c::timersStartStop(bool start) {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate) {
         setXmitStartTime(microsec_clock::universal_time());
@@ -297,7 +297,7 @@ void p7142sd3c::timersStartStop(bool start) {
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::startFilters() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (isSimulating())
         return;
@@ -311,7 +311,7 @@ void p7142sd3c::startFilters() {
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::stopFilters() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (isSimulating())
         return;
@@ -326,7 +326,7 @@ void p7142sd3c::stopFilters() {
 
 //////////////////////////////////////////////////////////////////////
 unsigned short int p7142sd3c::TTLIn() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return 0;
@@ -339,7 +339,7 @@ unsigned short int p7142sd3c::TTLIn() {
 
 //////////////////////////////////////////////////////////////////////
 void p7142sd3c::TTLOut(unsigned short int data) {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return;
@@ -350,7 +350,7 @@ void p7142sd3c::TTLOut(unsigned short int data) {
 
 //////////////////////////////////////////////////////////////////////
 unsigned int p7142sd3c::sd3cTypeAndRev() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return 1;
@@ -365,7 +365,7 @@ unsigned int p7142sd3c::sd3cTypeAndRev() {
 
 //////////////////////////////////////////////////////////////////////
 int p7142sd3c::sd3cRev() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return _simulateDDCType;
@@ -382,7 +382,7 @@ int p7142sd3c::sd3cRev() {
 
 //////////////////////////////////////////////////////////////////////
 p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return _simulateDDCType;
@@ -416,7 +416,7 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
 //////////////////////////////////////////////////////////////////////
 void
 p7142sd3c::loadFreeRun() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (isSimulating())
         return;
@@ -441,7 +441,7 @@ p7142sd3c::loadFreeRun() {
 /////////////////////////////////////////////////////////////////////////
 bool
 p7142sd3c::initTimers() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return true;
@@ -543,7 +543,7 @@ p7142sd3c::initTimers() {
 
 //////////////////////////////////////////////////////////////////////
 int p7142sd3c::dataRate() {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     int rate = 0;
 
@@ -576,7 +576,7 @@ int p7142sd3c::dataRate() {
 
 //////////////////////////////////////////////////////////////////////
 int64_t p7142sd3c::pulseAtTime(ptime time) const {
-    boost::recursive_mutex::scoped_lock guard(_p71xxMutex);
+    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
     
     // First get the time since transmit start, in seconds
     double timeSinceStart = 1.0e-6 * (time - _xmitStartTime).total_microseconds();

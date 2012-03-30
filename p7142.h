@@ -257,9 +257,6 @@ namespace Pentek {
             static int _bufset(int fd, int intbufsize, int bufN);
             /// Configure the board parameters, in p7142BoardParams
             void _configBoardParameters();
-            /// Configure the DMA parameters. The DMA buffering scheme is also
-            /// allocated and configured here.
-            void _configDmaParameters();
             /// Configure the down conversion path parameters
             void _configInParameters();
             /// Configure the up conversion path parameters
@@ -323,6 +320,10 @@ namespace Pentek {
                             unsigned int    bankDepth,
                             unsigned int   *dataBuf,
                             void*           hDev);
+            
+            /// @brief Initialize DMA for a selected ADC channel. This *must*
+            /// happen before the associated downconverter is instantiated!
+            void _initAdcDma(int chan);
 
             /// ReadyFlow device descriptor.
             void* _deviceHandle;

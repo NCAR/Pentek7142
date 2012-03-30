@@ -148,6 +148,10 @@ p7142Dn*
 p7142::addDownconverter(int chanId, int bypassdivrate,
         int simWavelength, bool sim4bytes) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
+
+    // Set up DMA for the channel before we instantiate a downconverter.
+    _initAdcDma(chanId);
+    
     // Just construct a new downconverter and put it in our list.
     p7142Dn* downconverter = new p7142Dn(
     		this,
@@ -174,6 +178,91 @@ p7142::addUpconverter(
     		mode);
     _addUpconverter(upconverter);
     return(upconverter);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+void
+p7142::_initAdcDma(int chan) {
+    // open a DMA channel (required before we allocate the buffer)
+    int status = PTK714X_DMAOpen(_deviceHandle, chan, &_adcDmaHandle[chan]);
+    if (status != PTK714X_STATUS_OK) {
+        std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
+        abort();
+    }
+    // allocate DMA buffers, one per channel/descriptor pair.
+    for (int d = 0; d < 4; d++) {
+        status = PTK714X_DMAAllocMem(_adcDmaHandle[chan], _dmaDescSize, 
+                &_adcDmaBuf[chan][d], (BOOL)0);
+        if (status != PTK714X_STATUS_OK) {
+            std::cerr << __PRETTY_FUNCTION__ << 
+            ": Unable to allocate a DMA buffer for channel " << chan << 
+            "/descriptor " << d << std::endl;
+            // Exit via INT signal, in hopes that cleanup will occur
+            raise(SIGINT);
+        }
+    }
+
+    /* Abort any existing transfers */
+    P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), chan);
+
+    /* Flush DMA channel buffer */
+    P7142DmaFlush(&(_p7142Regs.BAR0RegAddr), chan);
+
+    // set up channel parameters */
+    P7142DmaChanSetup(&(_p7142DmaParams.dmaChan[chan]),
+            PCI7142_DMA_CMD_STAT_DMA_ENABLE,
+            PCI7142_DMA_CMD_STAT_DEMAND_MODE_ENABLE,
+            PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
+            512,              /* Max Burst Count */
+            0);              /* Transfer Interval Count */
+
+    // configure four chained descriptors for each channel.
+    /// @todo There is a cryptic note in Section 5.19 of the Pentek 7142
+    /// operating manual which says the following about using the chain mode:
+    /// <br>
+    /// If you setup a DMA channel for a continuous data transfer (Chain
+    /// bit D31 = 1 in all four Descriptors), you must ensure that the gating
+    /// signal used for the transfer is not stopped before you stop
+    /// the transfer or the channel may hang up.
+    /// <br> They don't say what "hang up" means.
+    for (int d = 0; d < 4; d++) {
+        P7142DmaDescptrSetup(
+                &(_p7142DmaParams.dmaChan[chan]),
+                d,                                                     /* descriptor number */
+                _dmaDescSize,                                           /* transfer count in bytes */
+                PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
+                PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
+                (unsigned long)_adcDmaBuf[chan][d].kernBuf);    /* buffer address */
+    }
+
+    /* flush FIFO */
+    P7142FlushFifo(&(_p7142Regs.BAR2RegAddr.adcFifo[chan]),
+            &(_p7142InParams.adcFifo[chan]));
+
+    /* Flush the CPU caches */
+    for (int desc = 0; desc < 4; desc++) {
+        PTK714X_DMASyncCpu(&_adcDmaBuf[chan][desc]);
+    }
+
+    // initialize the dma chain index
+    _nextDesc[chan] = 0;
+
+    // Initialize the data that will be delivered to the dma interrupt handler
+    _adcDmaHandlerData[chan].chan  = chan;
+    _adcDmaHandlerData[chan].p7142 = this;
+
+//    // Reset the DMA registers for this channel, and apply the parameters now
+//    // in _p7142DmaParams
+//    status = P7142ResetDmaRegs(&(_p7142Regs.BAR0RegAddr));
+//    if (status != 0) {
+//        std::cerr << "Error " << status << 
+//        " resetting DMA registers for channel " << chan << std::endl;
+//    }
+    status = P7142InitDmaRegs(&_p7142DmaParams, &(_p7142Regs.BAR0RegAddr));
+    if (status != 0) {
+        std::cerr << "Error " << status << 
+        " initializing DMA registers for channel " << chan << std::endl;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -400,7 +489,6 @@ p7142::_initReadyFlow() {
     P7142SetDac5687Defaults(&_p7142Dac5686Params);
 
     // Apply our adjustments
-    _configDmaParameters();
     _configBoardParameters();
     _configInParameters();
     _configOutParameters();
@@ -451,90 +539,6 @@ void p7142::_configBoardParameters() {
     _p7142BoardParams.busBGateSource  = P7142_MSTR_CTRL_GATE_SRC_SEL_GATE;
 
     _p7142BoardParams.endianness = P7142_MISC_CTRL_ENDIANNESS_LE;
-
-}
-////////////////////////////////////////////////////////////////////////////////////////
-void p7142::_configDmaParameters() {
-
-    // Perform all DAM related configuration. Note that the buffering
-    // scheme is initialized here as well.
-
-    int status;
-
-    // -------------------------------------------------------------------------------//
-    // Configure the ADC channels
-    for (int chan = 0; chan < P7142_NCHANNELS; chan++) {
-
-        // open a DMA channel (required before we allocate the buffer)
-        status = PTK714X_DMAOpen(_deviceHandle, chan, &_adcDmaHandle[chan]);
-        if (status != PTK714X_STATUS_OK) {
-            std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << chan << std::endl;
-            abort();
-        }
-        // allocate DMA buffers, one per channel/descriptor pair.
-        for (int d = 0; d < 4; d++) {
-            status = PTK714X_DMAAllocMem(_adcDmaHandle[chan], _dmaDescSize, 
-                    &_adcDmaBuf[chan][d], (BOOL)0);
-            if (status != PTK714X_STATUS_OK) {
-                std::cerr << __PRETTY_FUNCTION__ << 
-                    ": Unable to allocate a DMA buffer for channel " << chan << 
-                    "/descriptor " << d << std::endl;
-                // Exit via INT signal, in hopes that cleanup will occur
-                raise(SIGINT);
-            }
-        }
-
-        /* Abort any existing transfers */
-        P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), chan);
-
-        /* Flush DMA channel buffer */
-        P7142DmaFlush(&(_p7142Regs.BAR0RegAddr), chan);
-
-        // set up channel parameters */
-        P7142DmaChanSetup(&(_p7142DmaParams.dmaChan[chan]),
-                          PCI7142_DMA_CMD_STAT_DMA_ENABLE,
-                          PCI7142_DMA_CMD_STAT_DEMAND_MODE_ENABLE,
-                          PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
-                          512,              /* Max Burst Count */
-                          0);              /* Transfer Interval Count */
-
-        // configure four chained descriptors for each channel.
-        /// @todo There is a cryptic note in Section 5.19 of the Pentek 7142
-        /// operating manual which says the following about using the chain mode:
-        /// <br>
-        /// If you setup a DMA channel for a continuous data transfer (Chain
-        /// bit D31 = 1 in all four Descriptors), you must ensure that the gating
-        /// signal used for the transfer is not stopped before you stop
-        /// the transfer or the channel may hang up.
-        /// <br> They don't say what "hang up" means.
-        for (int d = 0; d < 4; d++) {
-            P7142DmaDescptrSetup(
-                    &(_p7142DmaParams.dmaChan[chan]),
-                    d,                                                     /* descriptor number */
-                    _dmaDescSize,                                           /* transfer count in bytes */
-                    PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,             /* DMA interrupt */
-                    PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,               /* type of descriptor */
-                    (unsigned long)_adcDmaBuf[chan][d].kernBuf);    /* buffer address */
-        }
-
-        /* flush FIFO */
-        P7142FlushFifo(&(_p7142Regs.BAR2RegAddr.adcFifo[chan]),
-                       &(_p7142InParams.adcFifo[chan]));
-
-        /* Flush the CPU caches */
-        for (int desc = 0; desc < 4; desc++) {
-            PTK714X_DMASyncCpu(&_adcDmaBuf[chan][desc]);
-        }
-
-        // initialize the dma chain index
-        _nextDesc[chan] = 0;
-
-        // Initialize the data that will be delivered to the dma interrupt handler
-        _adcDmaHandlerData[chan].chan  = chan;
-        _adcDmaHandlerData[chan].p7142 = this;
-
-
-    }
 
 }
 
@@ -738,13 +742,13 @@ void
 p7142::_addDownconverter(p7142Dn * downconverter) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
     
-    int chanId = downconverter->chanId();
-    if (_downconverters[chanId]) {
-        std::cerr << "Existing downconverter for channel " << chanId <<
+    int chan = downconverter->chanId();
+    if (_downconverters[chan]) {
+        std::cerr << "Existing downconverter for channel " << chan <<
                 " is being replaced" << std::endl;
-        delete _downconverters[chanId];
+        delete _downconverters[chan];
     }
-    _downconverters[chanId] = downconverter;
+    _downconverters[chan] = downconverter;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

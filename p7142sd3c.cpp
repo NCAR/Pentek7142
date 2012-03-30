@@ -157,6 +157,9 @@ p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
         bool internalClock) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
+    // Set up DMA for the channel before we instantiate a downconverter.
+    _initAdcDma(chanId);
+    
     // Create a new p7142sd3cDn downconverter and put it in our list
     p7142sd3cDn* downconverter = new p7142sd3cDn(
     		this,

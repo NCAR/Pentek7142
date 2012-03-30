@@ -715,14 +715,14 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
                 pulseNum << "!" << std::endl;
         abort();
     } else if (delta != 1) {
-//        std::cerr << _lastPulse << "->" << pulseNum << ": ";
-//        if (delta < 0) {
-//            std::cerr << "Channel " << _chanId << " went BACKWARD " <<
-//                -delta << " pulses" << std::endl;
-//        } else {
-//            std::cerr << "Channel " << _chanId << " dropped " <<
-//                delta - 1 << " pulses" << std::endl;
-//        }
+        std::cerr << _lastPulse << "->" << pulseNum << ": ";
+        if (delta < 0) {
+            std::cerr << "Channel " << _chanId << " went BACKWARD " <<
+                -delta << " pulses" << std::endl;
+        } else {
+            std::cerr << "Channel " << _chanId << " dropped " <<
+                delta - 1 << " pulses" << std::endl;
+        }
     }
 
     _nPulsesSinceStart += delta;
@@ -791,9 +791,15 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
         // read beyond that if necessary.
         _syncErrors++;
 
+        // Keep information about the words we're skipping to find the next sync
+        std::ostringstream syncHuntMsg;
 
         uint32_t nHuntWords = 0;
+        uint32_t consecutiveData = 0;
         
+        syncHuntMsg << "Sync hunt words on chan " << _chanId << ": ";
+        syncHuntMsg << std::setfill('0');
+
         while (true) {
             // If we still have data that we read above, search through it
             // looking for the sync word. If we run out of previously read
@@ -820,11 +826,35 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
                 // Break out, since we found a sync word
                 break;
             }
+
+            // If the bad word can be broken into two 16-bit numbers with
+            // absolute value < 32, then consider it an I and Q data word.
+            // IMPORTANT NOTE: this assumes we have only noise on the channel, 
+            // hence  low I and Q values.
+            //
+            // Otherwise, print the word as being interesting (likely a pulse 
+            // tag).
+            int16_t * shortp = reinterpret_cast<int16_t *>(&word);
+            if ((shortp[0] > -32 && shortp[0] < 32) && 
+                (shortp[1] > -32 && shortp[1] < 32)) {
+                consecutiveData++;
+            } else {
+                // Report consecutive data words before this word
+                if (consecutiveData) {
+                    syncHuntMsg << "<DATA>x" << consecutiveData;
+                    consecutiveData = 0;
+                }
+                // Then the current interesting word
+                syncHuntMsg << "<" << std::setw(8) << std::hex << word << ">" <<
+                    std::dec;
+            }
         }
         
-        std::cerr << "Skipped " << nHuntWords - 1 << 
-            " non-SYNC words on chan " << _chanId << " to find next SYNC. " << 
-            std::endl;
+        if (consecutiveData) {
+            syncHuntMsg << "<DATA>x" << consecutiveData;
+        }
+        syncHuntMsg << "<SYNC>";
+        std::cerr << syncHuntMsg.str() << std::endl;
     }
 
     if (_syncErrors != startSyncErrors) {

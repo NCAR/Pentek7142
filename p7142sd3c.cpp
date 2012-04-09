@@ -19,11 +19,11 @@ const unsigned int p7142sd3c::ALL_SD3C_TIMER_BITS = 0xff0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142sd3c::p7142sd3c(int boardNum, int dmaBufferSize, bool simulate, double tx_delay,
+p7142sd3c::p7142sd3c(int boardNum, bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger) : 
-        p7142(boardNum, dmaBufferSize, simulate),
+        p7142(boardNum, simulate),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
         _gates(gates),
@@ -151,19 +151,18 @@ p7142sd3c::~p7142sd3c() {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 p7142sd3cDn*
-p7142sd3c::addDownconverter(int chanId, bool burstSampling, int tsLength,
-        double rx_delay, double rx_pulse_width, std::string gaussianFile, 
+p7142sd3c::addDownconverter(int chanId, uint32_t dmaDescSize, 
+        bool burstSampling, int tsLength, double rx_delay, 
+        double rx_pulse_width, std::string gaussianFile, 
         std::string kaiserFile, double simPauseMs, int simWavelength,
         bool internalClock) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
-    // Set up DMA for the channel before we instantiate a downconverter.
-    _initAdcDma(chanId);
-    
     // Create a new p7142sd3cDn downconverter and put it in our list
     p7142sd3cDn* downconverter = new p7142sd3cDn(
     		this,
 			chanId,
+			dmaDescSize,
 			burstSampling,
 			tsLength,
 			rx_delay,

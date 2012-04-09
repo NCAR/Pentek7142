@@ -15,6 +15,9 @@ class p7142Dn {
     /// Constructor
     /// @param p7142 a pointer to the owner p7142 object
     /// @param chanId The channel identifier (used to select /dn/*B)
+    /// @param dmaDescSize DMA descriptor size to use for this channel. This
+    /// is the amount of data written to DMA by the Pentek before an interrupt
+    /// is generated indicating data should be read.
     /// @param bypassdivrate The bypass divider (decimation) rate
     /// @param simulate Set true if we operate in simulation mode.
     /// @param simWaveLength The wave length, in timeseries points, for the
@@ -25,6 +28,7 @@ class p7142Dn {
     /// used instead of an external clock source.
     p7142Dn(p7142* p7142,
             int chanId,
+            uint32_t dmaDescSize,
             int bypassdivrate = 1,
             int simWaveLength = 5000,
             bool sim4bytes = false,
@@ -71,10 +75,69 @@ class p7142Dn {
         
 
     protected:
+        /// @brief Start Pentek writing to DMA for this channel.
+        void _start();
+        /// @brief Stop Pentek from writing to DMA for this channel.
+        void _stop();
+        /// @brief This static function is called by WinDriver each time a 
+        /// DMA descriptor transfer is completed by an ADC channel.
+        ///
+        /// The user data (pData) is a pointer to the instance of p7142Dn
+        /// responsible for the channel with incoming data. The 
+        /// p7142Dn::_dmaInterrupt() method is called to handle the actual
+        /// processing of the DMA transfer.
+        ///
+        /// DMA interrupts are cleared by the Kernel Device Driver.
+        ///
+        /// DMA interrupts are enabled when this routine is executed.
+        /// @param dmaHandle The DMA handle for the source channel
+        /// @param dmaChannel - number of the DMA channel generating the interrupt(0-3)
+        /// @param pData - Pointer to user defined data
+        /// @param pIntResults - Pointer to the interrupt results structure
+        static void _staticDmaHandler(
+                PVOID dmaHandle,
+                unsigned int dmaChannel,
+                PVOID pData,
+                PTK714X_INT_RESULT *pIntResult);
+        /// @brief This method is called from the static method 
+        /// _adcDmaIntHandler(), indicating that DMA data are ready for reading 
+        /// for this downconverter's channel. Data are read from DMA and 
+        /// inserted in _dmaDescSize chunks into the _filledBuffers queue.
+        /// According to the ReadyFlow notes, DMA interrupts are disabled
+        /// while _dmaIntHandler() is executing, and so they will be disabled 
+        /// as well while this method is executing.
+        void _dmaInterrupt();
+
+        /// @brief Initialize DMA for a selected ADC channel. This *must*
+        /// happen before the associated downconverter is instantiated!
+        void _initDma();
+
+        /// @brief Read bytes from the ADC channel. If no data are
+        /// available, the thread will be blocked. The request will not
+        /// return until the exact number of requested bytes can
+        /// be returned.
+        /// @param buf Buffer to receive the bytes..
+        /// @param bytes The number of bytes.
+        /// @return The number of bytes read. If an error occurs, minus
+        /// one will be returned.
+        int _read(char* buf, int bytes);
+        /// @brief The _simulatedRead() mimics _read(), but returns simulated
+        /// data rather than data actually obtained from the Pentek card.
+        /// A noisy sine wave with wavelength of _simWaveLength gates will be 
+        /// synthesized.
+        /// @see _read()
+        /// @param buf Buffer to receive the bytes..
+        /// @param bytes The number of bytes.
+        /// @return The number of bytes "read". If an error occurs, minus
+        /// one will be returned.
+        virtual int _simulatedRead(char* buf, int bytes);
         /// The P7142 which owns us...
         p7142& _p7142;
         /// Receiver channel number (0-3)
         int _chanId;
+        /// The number bytes in each DMA descriptor. This is the data interval
+        /// between interrupts telling us to read data from DMA.
+        const int _DmaDescSize;
         /// The number of bytes read since the last call to bytesRead()
         long _bytesRead;
         /// The wavelength for simulated data
@@ -85,6 +148,37 @@ class p7142Dn {
         bool _sim4bytes;
         /// Mutex for thread safety
         mutable boost::recursive_mutex _mutex;
+        /// ReadyFlow DMA handle
+        PTK714X_DMA_HANDLE*   _dmaHandle;
+        /// ReadyFlow DMA buffer address pointers, one for each of the 
+        /// four "descriptors" the DMA cycles through
+        PTK714X_DMA_BUFFER    _dmaBuf[4];
+        /// true if an AD channel is running
+        bool _adcActive;
+        /// Queue of free buffers available to hold data read from DMA
+        /// Each buffer will be of length _dmaDescSize
+        std::queue<char*> _freeBuffers;
+        /// Queue of filled buffers
+        std::queue<char*> _filledBuffers;
+        /// Mutex to control access to _freeBuffers and _filledBuffers
+        boost::mutex _bufMutex;
+        /// Condition variable which will activate when data are available
+        /// in _filledBuffers
+        boost::condition_variable _dataReadyCondition;
+        /// This is a vector used for temporary storage to satisfy read 
+        /// requests. To avoid ongoing resizing, we allocate it to its full 
+        /// length (2*_dmaBufSize). Bytes are added to the end of this buffer, 
+        /// and sucked out of the beginning to satisfy read requests.,
+        /// _readBufAvail tracks how many bytes are available in the buffer.
+        /// _readBufOut is the index of the next byte available in the buffer.
+        std::vector<char> _readBuf;
+        /// The number of bytes available in the _readBuf.
+        int _readBufAvail;
+        /// The next available byte in _readBuf.
+        unsigned int _readBufOut;
+        /// The next DMA descriptor to read.
+        /// The descriptor chain is 4 buffers long, and then it wraps back.
+        uint16_t _nextDesc;
 };
 
 }   // end namespace Pentek

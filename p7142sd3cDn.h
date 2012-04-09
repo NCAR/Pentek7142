@@ -98,6 +98,9 @@ public:
     /// @param p7142sd3cPtr Pointer to the p7142sd3c which owns this 
     ///     downconverter.
     /// @param chanId The channel identifier (0-3)
+    /// @param dmaDescSize DMA descriptor size to use for this channel. This
+    ///     is the amount of data written to DMA by the Pentek before an interrupt
+    ///     is generated indicating data should be read.
     /// @param burstSampling Set true if burst sampling should be used for this 
     ///     channel. Burst sampling implies that gates will be as short as the 
     ///     card's sampling clock will allow. The rx_pulsewidth and the sampling
@@ -118,7 +121,8 @@ public:
     ///     used instead of an external clock source.
     p7142sd3cDn(
         p7142sd3c * p7142sd3cPtr, 
-        int chanId, 
+        int chanId,
+        uint32_t dmaDescSize,
         bool burstSampling,
         int tsLength,
         double rx_delay, 
@@ -132,17 +136,6 @@ public:
     /// Destructor
     virtual ~p7142sd3cDn();
 
-    /// Stop data transfers
-    void stop();
-
-    /// Read bytes. If in simulated mode, a sine wave with wavelength
-    /// of _simWaveLength gates will be synthesized. It will have some 
-    /// random noise applied as well.
-    /// @param buf read bytes into this buffer
-    /// @param bufsize The number of bytes to read.
-    /// @return The actual number of bytes read
-    virtual int read(char* buf, int bufsize);
-    
     /// @return The receiver pulsewidth, in s
     double rcvrPulseWidth() const;
     
@@ -261,6 +254,14 @@ protected:
     /// @param seq Returns the sequence number;
     static void ciDecodeTag(uint32_t tag, int& format, int& chan, bool& odd, 
             bool& Q, uint32_t& seq);
+    /// @brief The _simulatedRead() mimics _read(), but returns simulated
+    /// data rather than data actually obtained from the Pentek card.
+    /// @see _read()
+    /// @param buf Buffer to receive the bytes..
+    /// @param bytes The number of bytes.
+    /// @return The number of bytes "read". If an error occurs, minus
+    /// one will be returned.
+    virtual int _simulatedRead(char* buf, int bytes);
     /// Fill _simfifo with simulated data. Make
     /// sure that there are at least the specified number of bytes.
     /// Sync words and tags are added as appropriate. For

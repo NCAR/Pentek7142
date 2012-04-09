@@ -126,18 +126,11 @@ namespace Pentek {
             static const int P7142_NCHANNELS = 4;
             /// (Suggested) time to sleep after P7142 ioctl calls, in microseconds
             static const int P7142_IOCTLSLEEPUS = 100;
-            /// This is the default size of the DMA descriptor buffers to which 
-            /// ADC data are written, and the size of the pending read buffer.
-            static const int DEFAULT_DMA_DESC_SIZE = 65536;
             
             /// Constructor,
             /// @param boardNum The board number.
-            /// @param dmaDescSize DMA descriptor size to use. This will set
-		    /// the spacing between DMA-generated interrupts and determines
-		    /// the amount of DMA memory reserved for each ADC channel.
             /// @param simulate Set true if we operate in simulation mode.
-            p7142(int boardNum, int dmaDescSize = DEFAULT_DMA_DESC_SIZE, 
-                    bool simulate = false);
+            p7142(int boardNum, bool simulate = false);
 			/// Destructor.
 			virtual ~p7142();
             /// @brief Tell if the P7142 is successfully configured and ready
@@ -155,6 +148,9 @@ namespace Pentek {
 
             /// Construct and add a downconverter for one of our receiver channels.
             /// @param chanId The channel identifier (used to select /dn/*B)
+    		/// @param dmaDescSize DMA descriptor size to use for this channel. This
+    		/// is the amount of data written to DMA by the Pentek before an interrupt
+    		/// is generated indicating data should be read.
             /// @param bypassdivrate The bypass divider (decimation) rate
             /// @param simulate Set true if we operate in simulation mode.
             /// @param simWaveLength The wave length, in timeseries points, for the
@@ -162,8 +158,9 @@ namespace Pentek {
             /// @param sim4bytes Create 4 byte instead of 2 byte integers when
             /// in simulation mode. This simulates the output of the coherent 
             /// integrator.
-            virtual p7142Dn* addDownconverter(int chanId, int bypassdivrate = 1,
-                    int simWavelength = 5000, bool sim4bytes = false);
+            virtual p7142Dn* addDownconverter(int chanId, uint32_t dmaDescSize,
+                    int bypassdivrate = 1, int simWavelength = 5000, 
+                    bool sim4bytes = false);
             
             /// Construct and add an upconverter for our device.
             /// @param sampleClockHz The DAC sample clock in Hz
@@ -179,14 +176,6 @@ namespace Pentek {
             friend class p7142Up;
 
 		protected:
-            /// @brief This routine is called from the ReadyFlow dma interrupt handler
-            /// adcDmaIntHandler(). It copies data from the dma interrupt buffer to the circular
-            /// buffer list. According to the ReadyFlow notes, dma interrupts are disabled
-            /// while dmaIntHandler() is executing, and so they will be disabled as well
-            /// while we are in this routine.
-            /// @param chan the A/D channel with data available
-            void _adcDmaInterrupt(int chan);
-
             /// Add (or replace) a downconverter on our list. If the 
             /// downconverter is associated with a channel for which we already
             /// have a downconverter, the existing downconverter for that
@@ -261,43 +250,6 @@ namespace Pentek {
             void _configInParameters();
             /// Configure the up conversion path parameters
             void _configOutParameters();
-            /// start DMA for the specified DMA channel
-            void start(int chan);
-            /// stop the DMA for the specified DMA channel.
-            void stop(int chan);
-            /// @brief This static function is called by WinDriver each time a 
-            /// DMA descriptor transfer is completed by an ADC channel (DMA 
-            /// channels 0-3).
-            ///
-            /// The user data (pData) that is delivered with the interrupt 
-            /// contains a pointer to an instance of p7142. The 
-            /// p7142::_adcDmaInterrupt() method is called to handle the actual
-            /// processing of the DMA transfer.
-            ///
-            /// DMA interrupts are cleared by the Kernel Device Driver.
-            ///
-            /// DMA interrupts are enabled when this routine is executed.
-            /// @param dmaHandle The DMA handle for the source channel
-            /// @param dmaChannel - number of the DMA channel generating the interrupt(0-3)
-            /// @param pData - Pointer to user defined data
-            /// @param pIntResults - Pointer to the interrupt results structure
-            static void _adcDmaIntHandler(
-                    PVOID dmaHandle,
-                    unsigned int dmaChannel,
-                    PVOID pData,
-                    PTK714X_INT_RESULT *pIntResult);
-            /// Read bytes from the ADC channel. If no data are
-            /// available, the thread will be blocked. The request will not
-            /// return until the exact number of requested bytes can
-            /// be returned.
-            /// Note that multiple threads will be accessing this routine,
-            /// can be individually blocked by the call.
-            /// @param chan The channel (0-3).
-            /// @param buf Buffer to receive the bytes..
-            /// @param bytes The number of bytes.
-            /// @return The number of bytes read. If an error occurs, minus
-            /// one will be returned.
-            int adcRead(int chan, char* buf, int bytes);
             /// Write to the selected memory bank.
             /// @param bank The selected bank -  0, 1 or 2
             /// @param buf Pointer to the buffer of bytes to be written.
@@ -321,20 +273,8 @@ namespace Pentek {
                             unsigned int   *dataBuf,
                             void*           hDev);
             
-            /// @brief Initialize DMA for a selected ADC channel. This *must*
-            /// happen before the associated downconverter is instantiated!
-            void _initAdcDma(int chan);
-
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
-            /// ReadyFlow dma handles, one per channel
-            PTK714X_DMA_HANDLE*   _adcDmaHandle[P7142_NCHANNELS];
-            /// ReadyFlow dma buffer address pointers, dimensioned by
-            /// ADC channel and DMA descriptor
-            PTK714X_DMA_BUFFER    _adcDmaBuf[P7142_NCHANNELS][4];
-            /// ReadyFlow user data. A pointer to these will be passed into
-            /// dmaIntHandler().
-            DmaHandlerData        _adcDmaHandlerData[P7142_NCHANNELS];
             
             /// ReadyFlow PCI BAR0 base address.
             DWORD                 _BAR0Base;
@@ -371,39 +311,6 @@ namespace Pentek {
             mutable boost::recursive_mutex _p7142Mutex;
             /// True if device is opened and accessible
             bool _isReady;
-            /// true if an AD channel is running
-            bool _adcActive[P7142_NCHANNELS];
-            /// Queue of free buffers available to hold data read from DMA,
-            /// one queue per channel.
-            /// Each buffer will be of length _dmaDescSize;
-            std::queue<char*> _freeBuffers[P7142_NCHANNELS];
-            /// Queue of filled buffers, one per channel.
-            std::queue<char*> _filledBuffers[P7142_NCHANNELS];
-            /// Mutex to control access to _freeBuffers and _filledBuffers,
-            /// one per channel.
-            boost::mutex _bufMutex[P7142_NCHANNELS];
-            /// Condition variable which will activate when data are available
-            /// in _filledBuffers[chan]
-            boost::condition_variable _dataReadyCondition[P7142_NCHANNELS];
-            /// This is a vector, one per channel, used for temporary
-            /// storage to satisfy read requests. To avoid ongoing
-            /// resizing, we allocate it to it's full length (2*_dmaBufSize).
-            /// Bytes are added to the end of this buffer, and sucked out of
-            /// the beginning to satisfy read requests.,
-            /// _readBufAvail tracks how many bytes are available in the buffer.
-            /// _readBufOut is the index of the next byte available in the buffer.
-            std::vector<char> _readBuf[P7142_NCHANNELS];
-            /// The number of bytes available in the _readBuf.
-            int _readBufAvail[P7142_NCHANNELS];
-            /// The next available byte in _readBuf.
-            unsigned int _readBufOut[P7142_NCHANNELS];
-            /// The number bytes to be transferred in each DMA transaction. Note
-            /// that each Pentek channel can make use of up to four DMA buffers,
-            /// filling them in a round-robin fashion.
-            const int _dmaDescSize;
-            /// The next DMA descriptor to read for each channel.
-            /// The descriptor chain is 4 buffers long, and then it wraps back.
-            uint16_t _nextDesc[P7142_NCHANNELS];
             
             /// The down converters attached to this device
             std::vector<p7142Dn*> _downconverters;

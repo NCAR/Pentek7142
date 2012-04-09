@@ -18,6 +18,7 @@ namespace Pentek {
 p7142sd3cDn::p7142sd3cDn(
 		p7142sd3c * p7142sd3cPtr,
 		int chanId,
+		uint32_t dmaDescSize,
         bool burstSampling,
         int tsLength,
         double rx_delay,
@@ -29,6 +30,7 @@ p7142sd3cDn::p7142sd3cDn(
         bool internalClock) :
         p7142Dn(p7142sd3cPtr, 
                 chanId, 
+                dmaDescSize,
                 1, 
                 simWaveLength,
                 p7142sd3cPtr->nsum() > 1,
@@ -609,17 +611,8 @@ void p7142sd3cDn::fifoConfig() {
 
 //////////////////////////////////////////////////////////////////////
 int
-p7142sd3cDn::read(char* buf, int n) {
+p7142sd3cDn::_simulatedRead(char* buf, int n) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
-
-    // Unless we're simulating, we just use the superclass read
-    if (!isSimulating()) {
-        int r =  p7142Dn::read(buf, n);
-        assert(r == n);
-	    return r;
-    }
-
-    // ************ simulation mode *************
 
     // Generate simulated data
     makeSimData(n);
@@ -1118,7 +1111,7 @@ p7142sd3cDn::makeSimData(int n) {
             for (int i = 0; i < _beamLength/4; i++) {
                 uint32_t iq;
                 char* p = (char*)&iq;
-                r = p7142Dn::read(p, 4);
+                r = p7142Dn::_simulatedRead(p, 4);
                 assert(r == 4);
                 for (int j = 0; j < 4; j++) {
                     _simFifo.push_back(p[j]);
@@ -1152,7 +1145,7 @@ p7142sd3cDn::makeSimData(int n) {
             for (int i = 0; i < nPairs; i++) {
                 uint32_t iq;
                 char* p = (char*)&iq;
-                r = p7142Dn::read(p, 4);
+                r = p7142Dn::_simulatedRead(p, 4);
                 assert(r == 4);
                 for (int j = 0; j < 4; j++) {
                     _simFifo.push_back(p[j]);
@@ -1192,7 +1185,7 @@ p7142sd3cDn::makeSimData(int n) {
             }
             for (int i = 0; i < nPairs; i++) {
                 char iq[8];
-                r = p7142Dn::read(iq, 8);
+                r = p7142Dn::_simulatedRead(iq, 8);
                 assert(r == 8);
                 for (int j = 0; j < 8; j++) {
                     _simFifo.push_back(iq[j]);
@@ -1262,11 +1255,6 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
         }
     }
     std::cout << std::dec << std::endl;;
-}
-
-//////////////////////////////////////////////////////////////////////////////////
-void p7142sd3cDn::stop() {
-	_sd3c.stop(_chanId);
 }
 
 } // end namespace Pentek

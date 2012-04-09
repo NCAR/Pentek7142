@@ -44,8 +44,6 @@ public:
 
     /// @brief Constructor.
     /// @param boardNum The board number. Use ok() to verify successful construction.
-    /// @param dmaBufferSize The size of the DMA buffers. One interrupt will occur for
-    /// this many bytes.
     /// @param simulate Set true for simulation mode.
     /// @param tx_delay the delay for the tx pulse in seconds
     /// @param tx_pulsewidth the length of the transmit pulse in seconds
@@ -70,7 +68,6 @@ public:
     ///     radar.
     p7142sd3c(
     		int boardNum,
-    		int dmaBufferSize,
     		bool simulate,
     		double tx_delay,
     		double tx_pulsewidth,
@@ -88,6 +85,8 @@ public:
     
     /// @brief Construct and add a downconverter for one of our receiver channels.
     /// @param chanId The channel identifier (0-3)
+    /// @param dmaDescSize Size of a DMA descriptor. This is the spacing, in
+    ///     bytes, between user-space interrupts to read DMA memory.
     /// @param burstSampling Set true if burst sampling should be used for this 
     ///     channel. Burst sampling implies that gates will be as short as the 
     ///     card's sampling clock will allow. The rx_pulsewidth and the sampling
@@ -110,6 +109,7 @@ public:
     ///     should be used
     virtual p7142sd3cDn * addDownconverter(
             int chanId, 
+            uint32_t dmaDescSize,
             bool burstSampling,
             int tsLength,
             double rx_delay, 

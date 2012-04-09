@@ -329,7 +329,7 @@ p7142Dn::_staticDmaHandler(
         pIntResult->intLost << ", flag is 0x" << std::hex << 
         pIntResult->intFlag << std::dec << std::endl;
     }
-    // Cast the user data to DmaHandlerData*
+    // Cast the user data to p7142Dn*
     p7142Dn * downconverter = static_cast<p7142Dn *>(pData);
 
     // Call the dmaInterrupt member function in the p7142Dn object
@@ -375,9 +375,7 @@ p7142Dn::_dmaInterrupt() {
         // Get the next free buffer and copy the data from DMA to the buffer
         char * buf = _freeBuffers.front();
         _freeBuffers.pop();
-        memcpy(buf, 
-                (char*)_dmaBuf[_nextDesc].usrBuf, 
-                _DmaDescSize);
+        memcpy(buf, (char*)_dmaBuf[_nextDesc].usrBuf, _DmaDescSize);
         nBufsRead++;
         
         // Add the buffer to the filled buffers queue

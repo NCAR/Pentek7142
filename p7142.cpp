@@ -110,7 +110,6 @@ p7142::~p7142() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     for (int i = 0; i < P7142_NCHANNELS; i++) {
-        P7142DmaAbort(&(_p7142Regs.BAR0RegAddr), 0);
         delete _downconverters[i];
     }
 

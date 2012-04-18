@@ -71,6 +71,9 @@ p7142Dn::p7142Dn(
 ////////////////////////////////////////////////////////////////////////////////
 p7142Dn::~p7142Dn() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
+    // Stop DMA and free DMA resources
+    _stop();
+    // Delete the buffers we allocated
     while (! _freeBuffers.empty()) {
         char * buf = _freeBuffers.front();
         _freeBuffers.pop();
@@ -503,6 +506,8 @@ p7142Dn::_start() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p7142Dn::_stop() {
+    std::cout << "Halting DMA for channel " << _chanId << 
+        " and freeing resources" << std::endl;
     if (_p7142.isSimulating()) {
         return;
     }

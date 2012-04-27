@@ -327,11 +327,11 @@ p7142Dn::_staticDmaHandler(
         PVOID pData,
         PTK714X_INT_RESULT *pIntResult)
 {
-    if (pIntResult->intLost > 0) {
-        std::cout << "On channel " << dmaChannel << " w/intLost = " <<
-        pIntResult->intLost << ", flag is 0x" << std::hex << 
-        pIntResult->intFlag << std::dec << std::endl;
-    }
+    ///if (pIntResult->intLost > 0) {
+    ///    std::cout << "On channel " << dmaChannel << " w/intLost = " <<
+    ///    pIntResult->intLost << ", flag is 0x" << std::hex <<
+    ///    pIntResult->intFlag << std::dec << std::endl;
+    ///}
     // Cast the user data to p7142Dn*
     p7142Dn * downconverter = static_cast<p7142Dn *>(pData);
 

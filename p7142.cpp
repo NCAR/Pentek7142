@@ -39,15 +39,19 @@ void ddrMemReadIntHandler(PVOID               hDev,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142::p7142(int boardNum, bool simulate):
+p7142::p7142(int boardNum, bool simulate, double simPauseMS):
 _boardNum(boardNum),
 _simulate(simulate),
 _p7142Mutex(),
 _isReady(false),
 _upconverter(0),
-_simPulseNum(0)
+_simPulseNum(0),
+_waitingDownconverters(0),
+_simWaitCounter(0),
+_simPauseMS(simPauseMS)
 {
-    boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
+
+	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
     // If we're simulating, things are simple...
     if (_simulate) {
         _isReady = true;
@@ -367,6 +371,7 @@ p7142::_addDownconverter(p7142Dn * downconverter) {
         delete _downconverters[chan]._dn;
     }
     _downconverters[chan]._dn = downconverter;
+    _downconverters[chan]._pulseNum = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -969,3 +974,36 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
 
     return (0);
 }
+
+/////////////////////////////////////////////////////////////////////
+uint32_t p7142::nextSimPulseNum(int chan) {
+
+	///@todo This class needs to be updated to cause the pulse number wrap
+	/// around to occur at the right number, depending on whether we are in
+	/// pulse tagger or coherent integrator mode.
+
+	boost::unique_lock<boost::mutex> lock(_simPulseNumMutex);
+    _waitingDownconverters++;
+    if (_waitingDownconverters < (_downconverters.size())) {
+    	//std::cout << "chan " << chan << " waiting for pulse number" << std::endl;
+    	_simPulseNumCondition.wait(lock);
+    } else {
+    	simWait();
+    	_waitingDownconverters = 0;
+    	_simPulseNumCondition.notify_all();
+    }
+    //std::cout << "chan " << chan << " gets pulse number " << _downconverters[chan]._pulseNum + 1 << std::endl;
+    return(_downconverters[chan]._pulseNum++);
+
+}
+//////////////////////////////////////////////////////////////////////////////////
+void
+p7142::simWait() {
+    // because the usleep overhead is large, sleep every 100 calls
+   	if (_simPauseMS > 0) {
+   	    if (!(_simWaitCounter++ % 100)) {
+        	usleep((int)(_simPauseMS*1000));
+    	}
+    }
+}
+

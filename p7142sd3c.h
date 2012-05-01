@@ -78,7 +78,8 @@ public:
     		unsigned int nsum,
     		bool freeRun,
     		DDCDECIMATETYPE simulateDDCType,
-    		bool externalStartTrigger = false);
+    		bool externalStartTrigger = false,
+    		double simPauseMS = 50);
     
     /// Destructor.
     virtual ~p7142sd3c();

@@ -40,6 +40,7 @@ namespace Pentek {
 	struct DmaHandlerData {
 	    int chan;
 	    Pentek::p7142* p7142;
+
 	};
 
 	/// A structure to manage details about the downconverters
@@ -47,7 +48,15 @@ namespace Pentek {
 	struct DownconverterInfo {
 		/// The downconverter
 		p7142Dn* _dn;
+		/// The last pulsenumber granted for this downconverter
+		uint32_t _pulseNum;
 	};
+
+    /// The maximum pulse number in a pulse tagger tag
+    static const int32_t MAX_PT_PULSE_NUM = 0x3FFFFFFF;
+
+    /// The maximum pulse number in a coherent integrator tag
+    static const int32_t MAX_CI_PULSE_NUM = 0xFFFFFF;
 
     /// Foundation class for a p7142 digital transceiver card.
     /// Card configuration and interaction are managed via the
@@ -127,6 +136,26 @@ namespace Pentek {
     /// The approach taken here will be to initialize the entire board in
     /// p7142. The associated p7142Dn and p7142Up classes will use the
     /// ReadyFlow macros as needed.
+	///
+	/// <h1>Simulation</h1>
+	/// The sd3c firmware can be configured to prepend pulse numbers
+	/// to each beam of data. In the ddc4 and ddc8 configurations, the separate
+	/// channels on the card operate at the same data rate, and are synchronized
+	/// such that the pulse numbers at a given time will be identical among
+	/// channels.
+	///
+	/// Since the p7142dn downconvertors are individually instantiated, they
+	/// are unaware of each other and cannot coordinate pulse numbers when
+	/// operating in simulation mode. p7142 provides a mechanism for achieving this.
+	/// The downconverters consume pulse numbers provided by nextSimPulseNum(). This routine keeps
+	/// track of successive calls by each downconverter, and makes sure that they are receiving
+	/// coordinated pulse numbers. If a requesting downconverter is getting ahead of
+	/// its peers, nextSimPulseNum() will block that thread untill all of the
+	/// downconverters have requested the next pulse number.
+	///
+	/// nextSimPulseNum() will also throttle the production of pulse numbers, by
+	/// sleeping for a specified time. It does this after every 100 pulse number
+	/// requests, since sleep() is an expensive habit.
 	class p7142 {
 
 		public:
@@ -138,7 +167,9 @@ namespace Pentek {
             /// Constructor,
             /// @param boardNum The board number.
             /// @param simulate Set true if we operate in simulation mode.
-            p7142(int boardNum, bool simulate = false);
+            /// @param simPauseMS The number of milliseconds to wait,after
+            /// every 100 requests for a simulated pulse number.
+            p7142(int boardNum, bool simulate = false, double simPauseMS = 50.0);
 			/// Destructor.
 			virtual ~p7142();
             /// @brief Tell if the P7142 is successfully configured and ready
@@ -198,6 +229,8 @@ namespace Pentek {
             /// @param upconverter the upconverter to be added.
             void _addUpconverter(p7142Up* upconverter);
             
+            uint32_t nextSimPulseNum(int chan);
+
             /// Perform a FIOREGGET ioctl call to the control device for the 
             /// given address. The resulting value is returned.
             /// @param addr The address of the register to get.
@@ -210,31 +243,6 @@ namespace Pentek {
             /// must call this method whenever they change their clock source
             /// via the CLKSRCSET ioctl!</em>
             void _resetDCM();
-            /// Borrowed shamelessly from dmem_dac.c in the readyflow examples
-            ///
-            /// Write data to the selected DDR memory bank, using DMA Channel 7.
-            /// @param p7142Regs Pointer to the 7142 register addres table
-            /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
-            /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
-            /// @param bankStartAddr Address in the bank at which to start reading
-            /// @param bankDepth Number of bytes to write. Yes, BYTES
-            /// @param dataBuf Nointer to the data buffer containing the data
-            /// @param hDev The 7142 Device Handle
-            /// @returns <br>
-            /// 0 - successful <br>
-            /// 1 - invalid bank number  <br>
-            /// 2 - invalid start address  <br>
-            /// 3 - bank depth extends past the end of the DDR bank <br>
-            /// 4 - DMA channel failed to open <br>
-            /// 5 - DMA buffer allocation failed <br>
-            /// 6 - semaphore creation failed <br>
-            /// 7 - semaphore wait timed out
-            int _ddrMemWrite (P7142_REG_ADDR* p7142Regs,
-                             unsigned int    bank,
-                             unsigned int    bankStartAddr,
-                             unsigned int    bankDepth,
-                             unsigned int   *dataBuf,
-                             PVOID           hDev);
             /// Initialize the ReadyFlow library.
             bool _initReadyFlow();
             /// Create a random number, with Gaussian distribution about a 
@@ -273,17 +281,61 @@ namespace Pentek {
             /// @return The number of bytes read. If an error occurs,
             /// minus one will be returned.
             int memRead(int bank, int32_t* buf, int bytes);
-
+            /// Borrowed shamelessly from dmem_dac.c in the readyflow examples
+            ///
+            /// Write data to the selected DDR memory bank, using DMA Channel 7.
+            /// @param p7142Regs Pointer to the 7142 register addres table
+            /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
+            /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
+            /// @param bankStartAddr Address in the bank at which to start reading
+            /// @param bankDepth Number of bytes to write. Yes, BYTES
+            /// @param dataBuf Nointer to the data buffer containing the data
+            /// @param hDev The 7142 Device Handle
+            /// @returns <br>
+            /// 0 - successful <br>
+            /// 1 - invalid bank number  <br>
+            /// 2 - invalid start address  <br>
+            /// 3 - bank depth extends past the end of the DDR bank <br>
+            /// 4 - DMA channel failed to open <br>
+            /// 5 - DMA buffer allocation failed <br>
+            /// 6 - semaphore creation failed <br>
+            /// 7 - semaphore wait timed out
+            int _ddrMemWrite (P7142_REG_ADDR* p7142Regs,
+                             unsigned int    bank,
+                             unsigned int    bankStartAddr,
+                             unsigned int    bankDepth,
+                             unsigned int   *dataBuf,
+                             PVOID           hDev);
+            /// Lifted shamelessly from dmem_dac.c in the readyflow examples
+            ///
+            /// Read data to the selected DDR memory bank, using DMA Channel 7.
+            /// @param p7142Regs Pointer to the 7142 register addres table
+            /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
+            /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
+            /// @param bankStartAddr Address in the bank at which to start reading
+            /// @param bankDepth Number of bytes to write. Yes, BYTES
+            /// @param dataBuf Nointer to the data buffer containing the data
+            /// @param hDev The 7142 Device Handle
+            /// @returns <br>
+            /// 0 - successful <br>
+            /// 1 - invalid bank number  <br>
+            /// 2 - invalid start address  <br>
+            /// 3 - bank depth extends past the end of the DDR bank <br>
+            /// 4 - DMA channel failed to open <br>
+            /// 5 - DMA buffer allocation failed <br>
+            /// 6 - semaphore creation failed <br>
+            /// 7 - semaphore wait timed out
             int _ddrMemRead (P7142_REG_ADDR *p7142Regs,
                             unsigned int    bank,
                             unsigned int    bankStartAddr,
                             unsigned int    bankDepth,
                             unsigned int   *dataBuf,
                             void*           hDev);
+            /// Each 100 calls, sleep for simPauseMS milliseconds.
+            void simWait();
             
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
-            
             /// ReadyFlow PCI BAR0 base address.
             DWORD                 _BAR0Base;
             /// ReadyFlow PCI BAR2 base address.
@@ -319,16 +371,27 @@ namespace Pentek {
             mutable boost::recursive_mutex _p7142Mutex;
             /// True if device is opened and accessible
             bool _isReady;
-            
             /// The down converters attached to this device.
             /// The container is indexed by the channel number.
             std::map<int, DownconverterInfo> _downconverters;
-
-            /// The upconverters attached to this device
+            /// The upconverter attached to this device
             p7142Up* _upconverter;
-
             /// The simulation pulse number.
             uint32_t _simPulseNum;
+            /// The number of downconverters waiting for a pulse number
+            int _waitingDownconverters;
+            /// The condition variable used to block downconverters who
+            /// need to wait for peers to catch up in consuming simulated
+            /// pulse numbers.
+            boost::condition_variable _simPulseNumCondition;
+            /// Mutex used with the simulated pulse number condition variable
+            mutable boost::mutex _simPulseNumMutex;
+            /// The sim wait counter, which controls how often simWait() will
+            /// actually sleep.
+            unsigned int _simWaitCounter;
+            /// The number of milliseconds that simWait() will sleep
+            double _simPauseMS;
+
 	};
 
 } // end namespace Pentek

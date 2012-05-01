@@ -40,9 +40,6 @@ p7142sd3cDn::p7142sd3cDn(
         _tsLength(tsLength),
         _gaussianFile(gaussianFile), 
         _kaiserFile(kaiserFile),
-        _simPulseNum(0),
-        _simPauseMS(simPauseMS),
-        _simWaitCounter(0),
         _lastPulse(0),
         _nPulsesSinceStart(0),
         _droppedPulses(0),
@@ -632,9 +629,9 @@ char*
 p7142sd3cDn::getBeam(int64_t& nPulsesSinceStart) {
 
     // perform the simulation wait if necessary
-    if (isSimulating()) {
-        simWait();
-    }
+    //if (isSimulating()) {
+    //    simWait();
+    //}
 
     switch (_sd3c._operatingMode()) {
         case p7142sd3c::MODE_FREERUN:
@@ -1130,7 +1127,8 @@ p7142sd3cDn::makeSimData(int n) {
             //       bits 31:30  Channel number         0-3 (2 bits)
             //       bits 29:00  Pulse sequence number  0-1073741823 (30 bits)
             // This is packed as a little-endian order 4-byte word;
-            uint32_t tag = (_chanId << 30) | (_simPulseNum & 0x3fffffff);
+            uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
+            uint32_t tag = (_chanId << 30) | (simPulseNum & 0x3fffffff);
             char* p = (char*)&tag;
             for (int i = 0; i < 4; i++) {
                 _simFifo.push_back(p[i]);
@@ -1151,10 +1149,6 @@ p7142sd3cDn::makeSimData(int n) {
                     _simFifo.push_back(p[j]);
                 }
             }
-            _simPulseNum++;
-            if (_simPulseNum > MAX_PT_PULSE_NUM) {
-                _simPulseNum = 0;
-            }
             break;
         }
         case p7142sd3c::MODE_CI: {
@@ -1168,8 +1162,10 @@ p7142sd3cDn::makeSimData(int n) {
             ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
             ///  --! bits 23:00  Sequence number     (24 bits)
 
+            uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
             for (int j = 0; j < 4; j++) {
-                uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, _simPulseNum);
+                //uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, _simPulseNum);
+                uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, simPulseNum);
                 char* p = (char*)&tag;
                 for (int i = 0; i < 4; i++) {
                     _simFifo.push_back(p[i]);
@@ -1191,10 +1187,6 @@ p7142sd3cDn::makeSimData(int n) {
                     _simFifo.push_back(iq[j]);
                 }
             }
-            _simPulseNum += 1;
-            if (_simPulseNum > MAX_CI_PULSE_NUM) {
-                _simPulseNum = 0;
-            }
 
             break;
         }
@@ -1202,16 +1194,6 @@ p7142sd3cDn::makeSimData(int n) {
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////
-void
-p7142sd3cDn::simWait() {
-    // because the usleep overhead is large, sleep every 100 calls
-   	if (_simPauseMS > 0) {
-   	    if (!(_simWaitCounter++ % 100)) {
-        	usleep((int)(100*_simPauseMS*1000)*_nsum);
-    	}
-    }
-}
 //////////////////////////////////////////////////////////////////////////////////
 void
 p7142sd3cDn::unpackPtChannelAndPulse(const char* buf, unsigned int & chan,

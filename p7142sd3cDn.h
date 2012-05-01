@@ -268,14 +268,10 @@ protected:
     /// PT and CI modes, occasional data drops are simulated.
     /// @param n The minimum number of bytes that _simFifo must
     /// contain on return from the routine.
+    /// makeSimData() calls _sd3c.nextSimPulseNum(() to get
+    /// simulated pulse numbers. The data rate throttling
+    /// is implmented in nextSimPulseNum().
     void makeSimData(int n);
-    /// Perform the simulation wait. Called once per simulated beam.
-    /// It will pause at a rate that is specified as the per beam
-    /// wait time in simPauseMS. However, it will save up the pauses
-    /// and do a 100x pause every 100 calls, so that the effective
-    /// rate is close to the desired rate. Otherwise, the usleep() overhead
-    /// kills us.
-    void simWait();
     /// Decode the pulse tagger channel/pulse number word.
     /// @param buf A pointer to the channel/pulse number word.
     /// @param chan Return argument for the unpacked channel number.
@@ -291,12 +287,6 @@ protected:
     
     /// The SD3C synchronization word value.
     static const uint32_t SD3C_SYNCWORD = 0xAAAAAAAA;
-    
-    /// The maximum pulse number in a pulse tagger tag
-    static const int32_t MAX_PT_PULSE_NUM = 0x3FFFFFFF;
-    
-    /// The maximum pulse number in a coherent integrator tag
-    static const int32_t MAX_CI_PULSE_NUM = 0xFFFFFF;
     
     /// The p7142sd3c which owns us
     p7142sd3c & _sd3c;
@@ -317,12 +307,6 @@ protected:
     int _beamLength;
     /// The buffer that collects IQ data.
     char* _buf;
-    /// The pulse number if we're simulating data
-    int _simPulseNum;
-    /// The number of ms to pause between each beam in simulation mode
-    double _simPauseMS;
-    /// The sim wait counter
-    unsigned int _simWaitCounter;
     /// The last pulse sequence number that we received. Used to keep
     /// track of dropped pulses.
     int _lastPulse;

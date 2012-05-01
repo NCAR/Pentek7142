@@ -14,6 +14,7 @@
 #include <csignal>
 #include <vector>
 #include <queue>
+#include <map>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition.hpp>
 
@@ -39,6 +40,13 @@ namespace Pentek {
 	struct DmaHandlerData {
 	    int chan;
 	    Pentek::p7142* p7142;
+	};
+
+	/// A structure to manage details about the downconverters
+	/// that are active.
+	struct DownconverterInfo {
+		/// The downconverter
+		p7142Dn* _dn;
 	};
 
     /// Foundation class for a p7142 digital transceiver card.
@@ -312,10 +320,15 @@ namespace Pentek {
             /// True if device is opened and accessible
             bool _isReady;
             
-            /// The down converters attached to this device
-            std::vector<p7142Dn*> _downconverters;
+            /// The down converters attached to this device.
+            /// The container is indexed by the channel number.
+            std::map<int, DownconverterInfo> _downconverters;
+
             /// The upconverters attached to this device
             p7142Up* _upconverter;
+
+            /// The simulation pulse number.
+            uint32_t _simPulseNum;
 	};
 
 } // end namespace Pentek

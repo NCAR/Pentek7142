@@ -8,76 +8,34 @@
 
 using namespace Pentek;
 
-/* Global references */
+////////////////////////////////////////////////////////////////////////////////////////
 
-/// @todo This will need to be fixed when we try to access multiple Pentek cards
-sem_t dmaWriteSemHandle;
+/// Semaphore used by the _ddrMemWrite() routine to signal that an interrupt was
+/// received from a dma transfer
+sem_t ddrMemWriteSem;
 
-/// @todo This will need to be fixed when we try to access multiple Pentek cards
-/************************************************************************
- Function: dmaWriteIntHandler
-
- Description: This routine is an interrupt handler for the DMA Descriptor
-              Finish interrupt for DMA Channel 7.
-
- Inputs:      hDev        - 7142 Device Handle
-              lintSource  - Local interrupt source generating the
-                            interrupt(0-15).  In this example, this
-                            corresponds with dmaChannel.
-              pIntResults - Pointer to the interrupt results structure
-
- Returns:     none
-
- Notes:       Fifo interrupts are cleared by the Kernel Device Driver.
-              Fifo interrupts are enabled when this routine is executed.
-************************************************************************/
-void dmaWriteIntHandler(PVOID               hDev,
+/// Interrupt handler used by the ddrMemWrite() DMA transfers
+void ddrMemWriteIntHandler(PVOID               hDev,
                         int                lintSource,
                         PVOID               pData,
                         PTK714X_INT_RESULT *pIntResult)
 {
-    sem_post(&dmaWriteSemHandle);
+    sem_post(&ddrMemWriteSem);
 }
 
-/// @todo This will need to be fixed when we try to access multiple Pentek cards
-sem_t memWriteDmaSem;
-sem_t memReadDmaSem;
+////////////////////////////////////////////////////////////////////////////////////////
 
-/// @todo This will need to be fixed when we try to access multiple Pentek cards
-/************************************************************************/
-void memWriteDmaIntHandler(PVOID               hDev,
-                        int                lintSource,
-                        PVOID               pData,
-                        PTK714X_INT_RESULT *pIntResult)
-{
-    sem_post(&memWriteDmaSem);
-}
+/// Semaphore used by the _ddrMemRead() routine to signal that an interrupt was
+/// received from a dma transfer.
+sem_t ddrMemReadSem;
 
-
-/// @todo This will need to be fixed when we try to access multiple Pentek cards
-/************************************************************************
- Function: dmaReadIntHandler
-
- Description: This routine is an interrupt handler for the DMA Descriptor
-              Finish interrupt for DMA Channel 0.
-
- Inputs:      hDev        - 7142 Device Handle
-              lintSource  - Local interrupt source generating the
-                            interrupt(0-15).  In this example, this
-                            corresponds with dmaChannel.
-              pIntResults - Pointer to the interrupt results structure
-
- Returns:     none
-
- Notes:       Fifo interrupts are cleared by the Kernel Device Driver.
-              Fifo interrupts are enabled when this routine is executed.
-************************************************************************/
-void memReadDmaIntHandler(PVOID               hDev,
+/// Interrupt handler used by the _ddrMemRead() DMA transfers.
+void ddrMemReadIntHandler(PVOID               hDev,
                        int                lintSource,
                        PVOID               pData,
                        PTK714X_INT_RESULT *pIntResult)
 {
-    sem_post(&memReadDmaSem);
+    sem_post(&ddrMemReadSem);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -86,8 +44,8 @@ _boardNum(boardNum),
 _simulate(simulate),
 _p7142Mutex(),
 _isReady(false),
-_downconverters(P7142_NCHANNELS),
-_upconverter(0)
+_upconverter(0),
+_simPulseNum(0)
 {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
     // If we're simulating, things are simple...
@@ -109,9 +67,13 @@ p7142::~p7142() {
 
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
-    for (int i = 0; i < P7142_NCHANNELS; i++) {
-        delete _downconverters[i];
+    // destroy the down convertors
+    for (std::map<int, DownconverterInfo>::iterator i = _downconverters.begin();
+    	i != _downconverters.end(); i++) {
+        delete i->second._dn;
     }
+    // empty the list of active down converters
+    _downconverters.erase(_downconverters.begin(), _downconverters.end());
 
     /* cleanup for exit */
     PTK714X_DeviceClose(_deviceHandle);
@@ -399,12 +361,12 @@ p7142::_addDownconverter(p7142Dn * downconverter) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
     
     int chan = downconverter->chanId();
-    if (_downconverters[chan]) {
+    if (_downconverters.find(chan) != _downconverters.end()) {
         std::cerr << "Existing downconverter for channel " << chan <<
                 " is being replaced" << std::endl;
-        delete _downconverters[chan];
+        delete _downconverters[chan]._dn;
     }
-    _downconverters[chan] = downconverter;
+    _downconverters[chan]._dn = downconverter;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -449,7 +411,7 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
                  uint32_t*        dataBuf,
                  PVOID           hDev)
 {
-    PTK714X_DMA_HANDLE  *dmaWriteHandle;
+    PTK714X_DMA_HANDLE  *ddrDmaWriteHandle;
     PTK714X_DMA_BUFFER   dmaBuf;
     P7142_FIFO_PARAMS    fifoParams;   /* FIFO params */
     P7142_DMA_PARAMS     dmaParams;    /* DMA params */
@@ -478,15 +440,15 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     /* DMA setup --------------------------------------------------------- */
 
     /* open a DMA channel to write to the delay memory */
-    status = PTK714X_DMAOpen(hDev, P7142_DMA_CHAN_7, &dmaWriteHandle);
+    status = PTK714X_DMAOpen(hDev, P7142_DMA_CHAN_7, &ddrDmaWriteHandle);
     if (status != PTK714X_STATUS_OK)
         return (4);
 
     /* allocate system memory for write data buffer */
-    status = PTK714X_DMAAllocMem(dmaWriteHandle, bankDepth, &dmaBuf, (BOOL)0);
+    status = PTK714X_DMAAllocMem(ddrDmaWriteHandle, bankDepth, &dmaBuf, (BOOL)0);
     if (status != PTK714X_STATUS_OK)
     {
-        PTK714X_DMAClose(hDev, dmaWriteHandle);
+        PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
         return (5);
     }
 
@@ -497,22 +459,22 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     /* Interrupt & semaphore setup --------------------------------------- */
 
     /* enable the DMA interrupt */
-    status = PTK714X_DMAIntEnable(dmaWriteHandle,
+    status = PTK714X_DMAIntEnable(ddrDmaWriteHandle,
                                   PTK714X_DMA_DESCRIPTOR_FINISH,
-                                  NULL, (PTK714X_INT_HANDLER)dmaWriteIntHandler);
+                                  NULL, (PTK714X_INT_HANDLER)ddrMemWriteIntHandler);
     if (status != PTK714X_STATUS_OK)
     {
-        PTK714X_DMAFreeMem(dmaWriteHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaWriteHandle);
+        PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
         return (6);
     }
 
     /* create a DMA Complete semaphore for this DMA channel */
-    if((sem_init(&dmaWriteSemHandle,0,0))<0)
+    if((sem_init(&ddrMemWriteSem,0,0))<0)
     {
-        PTK714X_DMAIntDisable(dmaWriteHandle);
-        PTK714X_DMAFreeMem(dmaWriteHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaWriteHandle);
+        PTK714X_DMAIntDisable(ddrDmaWriteHandle);
+        PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
         return (7);
     }
 
@@ -643,13 +605,13 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     P7142DmaStart(&(p7142Regs->BAR0RegAddr), P7142_DMA_CHAN_7);
 
     /* wait for interrupt completion */
-    status = sem_wait(&dmaWriteSemHandle);
+    status = sem_wait(&ddrMemWriteSem);
     if (status != 0)
     {
-        sem_destroy(&dmaWriteSemHandle);
-        PTK714X_DMAIntDisable(dmaWriteHandle);
-        PTK714X_DMAFreeMem(dmaWriteHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaWriteHandle);
+        sem_destroy(&ddrMemWriteSem);
+        PTK714X_DMAIntDisable(ddrDmaWriteHandle);
+        PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
         return (8);
     }
 
@@ -693,13 +655,13 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
         P7142DmaStart(&(p7142Regs->BAR0RegAddr), P7142_DMA_CHAN_7);
 
         /* wait for interrupt completion */
-        status = sem_wait(&dmaWriteSemHandle);
+        status = sem_wait(&ddrMemWriteSem);
         if (status != 0)
         {
-            sem_destroy(&dmaWriteSemHandle);
-            PTK714X_DMAIntDisable(dmaWriteHandle);
-            PTK714X_DMAFreeMem(dmaWriteHandle, &dmaBuf);
-            PTK714X_DMAClose(hDev, dmaWriteHandle);
+            sem_destroy(&ddrMemWriteSem);
+            PTK714X_DMAIntDisable(ddrDmaWriteHandle);
+            PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
+            PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
             return (8);
         }
     }
@@ -717,10 +679,10 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
         P7142_FIFO_DISABLE);
 
     /* clean up */
-    sem_destroy(&dmaWriteSemHandle);
-    PTK714X_DMAIntDisable(dmaWriteHandle);
-    PTK714X_DMAFreeMem(dmaWriteHandle, &dmaBuf);
-    PTK714X_DMAClose(hDev, dmaWriteHandle);
+    sem_destroy(&ddrMemWriteSem);
+    PTK714X_DMAIntDisable(ddrDmaWriteHandle);
+    PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
+    PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
 
     return (0);
 }
@@ -783,7 +745,7 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
                 PVOID           hDev)
 
 {
-    PTK714X_DMA_HANDLE  *dmaReadHandle;
+    PTK714X_DMA_HANDLE  *ddrDmaReadHandle;
     PTK714X_DMA_BUFFER   dmaBuf;
     P7142_FIFO_PARAMS    fifoParams;   /* FIFO params */
     P7142_DMA_PARAMS     dmaParams;    /* DMA params */
@@ -809,37 +771,37 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
     /* DMA setup --------------------------------------------------------- */
 
     /* open a DMA channel to read from the delay memory */
-    status = PTK714X_DMAOpen(hDev, P7142_DMA_CHAN_8, &dmaReadHandle);
+    status = PTK714X_DMAOpen(hDev, P7142_DMA_CHAN_8, &ddrDmaReadHandle);
     if (status != PTK714X_STATUS_OK)
         return (4);
 
     /* allocate system memory for read data buffer */
-    status = PTK714X_DMAAllocMem(dmaReadHandle, (bankDepth + 128), &dmaBuf, (BOOL)0);
+    status = PTK714X_DMAAllocMem(ddrDmaReadHandle, (bankDepth + 128), &dmaBuf, (BOOL)0);
     if (status != PTK714X_STATUS_OK)
     {
-        PTK714X_DMAClose(hDev, dmaReadHandle);
+        PTK714X_DMAClose(hDev, ddrDmaReadHandle);
         return (5);
     }
 
 
     /* Interrupt & semaphore setup --------------------------------------- */
     /* enable the DMA interrupt */
-    status = PTK714X_DMAIntEnable(dmaReadHandle,
+    status = PTK714X_DMAIntEnable(ddrDmaReadHandle,
                                   PTK714X_DMA_DESCRIPTOR_FINISH,
-                                  NULL, (PTK714X_INT_HANDLER)memReadDmaIntHandler);
+                                  NULL, (PTK714X_INT_HANDLER)ddrMemReadIntHandler);
     if (status != PTK714X_STATUS_OK)
         {
-        PTK714X_DMAFreeMem(dmaReadHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaReadHandle);
+        PTK714X_DMAFreeMem(ddrDmaReadHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaReadHandle);
         return (6);
         }
 
     /* create a DMA Complete semaphore for this DMA channel */
-    if((sem_init(&memReadDmaSem,0,0))<0)
+    if((sem_init(&ddrMemReadSem,0,0))<0)
         {
-        PTK714X_DMAIntDisable(dmaReadHandle);
-        PTK714X_DMAFreeMem(dmaReadHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaReadHandle);
+        PTK714X_DMAIntDisable(ddrDmaReadHandle);
+        PTK714X_DMAFreeMem(ddrDmaReadHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaReadHandle);
         return (7);
         }
 
@@ -971,13 +933,13 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
     P7142DmaStart(&(p7142Regs->BAR0RegAddr), P7142_DMA_CHAN_8);
 
     /* wait for interrupt completion */
-    status = sem_wait(&memReadDmaSem);
+    status = sem_wait(&ddrMemReadSem);
     if (status != 0)
     {
-        sem_destroy(&memReadDmaSem);
-        PTK714X_DMAIntDisable(dmaReadHandle);
-        PTK714X_DMAFreeMem(dmaReadHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, dmaReadHandle);
+        sem_destroy(&ddrMemReadSem);
+        PTK714X_DMAIntDisable(ddrDmaReadHandle);
+        PTK714X_DMAFreeMem(ddrDmaReadHandle, &dmaBuf);
+        PTK714X_DMAClose(hDev, ddrDmaReadHandle);
         return (8);
     }
 
@@ -1000,10 +962,10 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
         P7142_FIFO_DISABLE);
 
     /* clean up */
-    sem_destroy(&memReadDmaSem);
-    PTK714X_DMAIntDisable(dmaReadHandle);
-    PTK714X_DMAFreeMem(dmaReadHandle, &dmaBuf);
-    PTK714X_DMAClose(hDev, dmaReadHandle);
+    sem_destroy(&ddrMemReadSem);
+    PTK714X_DMAIntDisable(ddrDmaReadHandle);
+    PTK714X_DMAFreeMem(ddrDmaReadHandle, &dmaBuf);
+    PTK714X_DMAClose(hDev, ddrDmaReadHandle);
 
     return (0);
 }

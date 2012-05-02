@@ -25,7 +25,6 @@ p7142sd3cDn::p7142sd3cDn(
         double rx_pulsewidth,
         std::string gaussianFile,
         std::string kaiserFile,
-        double simPauseMS,
         int simWaveLength,
         bool internalClock) :
         p7142Dn(p7142sd3cPtr, 

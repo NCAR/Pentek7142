@@ -129,7 +129,6 @@ public:
         double rx_pulsewidth,
         std::string gaussianFile, 
         std::string kaiserFile,
-        double simPauseMS = 0.1,
         int simWaveLength = 5000,
         bool internalClock = false);
     

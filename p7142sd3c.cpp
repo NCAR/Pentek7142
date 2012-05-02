@@ -170,7 +170,6 @@ p7142sd3c::addDownconverter(int chanId, uint32_t dmaDescSize,
 			rx_pulse_width,
 			gaussianFile,
 			kaiserFile,
-			simPauseMs,
 			simWavelength,
 			internalClock);
 

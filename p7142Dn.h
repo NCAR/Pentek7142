@@ -46,13 +46,6 @@ class p7142Dn {
         /// @return the number of bytes read by this downconverter
         /// since the last call to bytesRead().
         long bytesRead();
-        /// Return The number of overrun, or underrun samples and clear
-        /// the over/under-run counter. Return -1 if unable to get this 
-        /// information, and set _ok to false.
-        /// @return The number of overrun, or underrun samples and clear
-        /// the over/under-run counter. Return -1 if unable to get this 
-        /// information, and set _ok to false.
-        virtual int overUnderCount();
         /// Are we using the card's internal clock?
         /// @return true iff this channel using the card's internal clock
         bool usingInternalClock() const;

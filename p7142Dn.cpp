@@ -88,40 +88,6 @@ p7142Dn::~p7142Dn() {
 
 ////////////////////////////////////////////////////////////////////////////////
 int
-p7142Dn::overUnderCount() {
-    //boost::recursive_mutex::scoped_lock guard(_mutex);
-
-	int count = 0;
-    // if simulate, indicate no errors.
-    if (isSimulating()) {
-        return count;
-    }
-
-    /// @todo Need to track down how the overflow count was
-    /// done in the pentek driver, and migrate to ReadyFlow usage here.
-    /**
-    int count = ioctl(_dnFd, FIOGETOVRCNT);
-    if (count == -1) {
-        std::cout << "unable to get ovr/under for "
-                << _dnName << std::endl;
-        perror("");
-        return -1;
-    }
-
-    // clear the overrun counter
-    if (ioctl(_dnFd, FIOCLROVRCNT) == -1) {
-        std::cout << "unable to clear ovr/under for "
-                << _dnName << std::endl;
-        perror("");
-        return -1;
-    }
-     **/
-
-    return count;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-int
 p7142Dn::read(char* buf, int bufsize) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 

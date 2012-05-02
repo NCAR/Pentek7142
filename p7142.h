@@ -348,6 +348,8 @@ namespace Pentek {
 
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
+            /// Index for this instance of p7142.
+            uint16_t _cardIndex;
             /// ReadyFlow PCI BAR0 base address.
             DWORD                 _BAR0Base;
             /// ReadyFlow PCI BAR2 base address.

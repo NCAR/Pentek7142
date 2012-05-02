@@ -51,6 +51,7 @@ uint16_t p7142::_NumOpenCards = 0;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 p7142::p7142(bool simulate, double simPauseMS):
+_cardIndex(_NumOpenCards),
 _simulate(simulate),
 _p7142Mutex(),
 _isReady(false),
@@ -84,7 +85,7 @@ p7142::~p7142() {
 
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
-    // destroy the down convertors
+    // destroy the down converters
     for (std::map<int, DownconverterInfo>::iterator i = _downconverters.begin();
     	i != _downconverters.end(); i++) {
         delete i->second._dn;
@@ -94,8 +95,13 @@ p7142::~p7142() {
 
     /* cleanup for exit */
     PTK714X_DeviceClose(_deviceHandle);
-    PTK714X_LibUninit();
-    std::cout << "ReadyFlow closed" << std::endl;
+    _NumOpenCards--;
+    
+    /* If there are no instances left, close up the ReadyFlow library */
+    if (_NumOpenCards == 0) {
+        PTK714X_LibUninit();
+        std::cout << "ReadyFlow closed" << std::endl;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

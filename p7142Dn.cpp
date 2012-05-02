@@ -472,8 +472,8 @@ p7142Dn::_start() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p7142Dn::_stop() {
-    std::cout << "Halting DMA for channel " << _chanId << 
-        " and freeing resources" << std::endl;
+    std::cout << "Halting DMA for card " << _p7142._cardIndex << "/channel " << 
+        _chanId << " and freeing resources" << std::endl;
     if (_p7142.isSimulating()) {
         return;
     }
@@ -488,7 +488,7 @@ p7142Dn::_stop() {
     P7142DmaAbort(&(_p7142._p7142Regs.BAR0RegAddr), _chanId);
 
     /* Disable DMA Interrupt for this channel */
-   status = PTK714X_DMAIntDisable(_dmaHandle);
+    status = PTK714X_DMAIntDisable(_dmaHandle);
     if (status != PTK714X_STATUS_OK) {
         std::cerr << __FILE__ << ":" << __FUNCTION__ <<
                 ": DMA interrupt disable failed" << std::endl;

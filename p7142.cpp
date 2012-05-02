@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <csignal>
 
 using namespace Pentek;
 
@@ -38,9 +39,18 @@ void ddrMemReadIntHandler(PVOID               hDev,
     sem_post(&ddrMemReadSem);
 }
 
+/// Static member to keep track of the "PCI slot" of the last instantiated p7142.
+/// This is needed for calls to ReadyFlow's PTK714X_DeviceFindAndOpen() 
+/// function. To open 7142 cards in sequence, we start with _Next7142Slot = -2.
+/// See the ReadyFlow documentation for PTK714X_DeviceFindAndOpen().
+DWORD p7142::_Next7142Slot = -2;
+
+/// Static member to keep track of how many 7142 cards we have open (i.e., how
+/// many instances of this class are there so far).
+uint16_t p7142::_NumOpenCards = 0;
+
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142::p7142(int boardNum, bool simulate, double simPauseMS):
-_boardNum(boardNum),
+p7142::p7142(bool simulate, double simPauseMS):
 _simulate(simulate),
 _p7142Mutex(),
 _isReady(false),
@@ -59,6 +69,9 @@ _simPauseMS(simPauseMS)
     	// initialize ReadyFlow
     	_isReady = _initReadyFlow();
     }
+    // If we were successful, increment the open card count
+    if (_isReady)
+        _NumOpenCards++;
 
     return;
 }
@@ -168,7 +181,6 @@ int p7142::memRead(int bank, int32_t* buf, int bytes) {
 ////////////////////////////////////////////////////////////////////////////////////////
 bool
 p7142::_initReadyFlow() {
-    _pciSlot = -1;
     _deviceHandle = NULL;
 
     /* initialize the PTK714X library */
@@ -179,11 +191,12 @@ p7142::_initReadyFlow() {
         return false;
     }
 
-    /* Find and open a PTK714X device (by default ID) */
-    _deviceHandle = PTK714X_DeviceFindAndOpen(&_pciSlot, &_BAR0Base, &_BAR2Base);
+    /* Find and open the next PTK714X device */
+    _deviceHandle = PTK714X_DeviceFindAndOpen(&_Next7142Slot, &_BAR0Base, &_BAR2Base);
     if (_deviceHandle == NULL)
     {
-        std::cerr << "Pentek 7142 device not found" << std::endl;
+        std::cerr << "Pentek 7142 device not found when opening card " << 
+                _NumOpenCards << std::endl;
     }
 
     /* Initialize 7142 register address tables */
@@ -193,7 +206,8 @@ p7142::_initReadyFlow() {
     P7142_GET_MODULE_ID(_p7142Regs.BAR2RegAddr.idReadout, _moduleId);
     if (_moduleId != P7142_MODULE_ID)
     {
-        std::cerr << "Failed to identify a Pentek 7142 module." << std::endl;
+        std::cerr << "Pentek card " << _NumOpenCards + 1 << " is not a 7142!" <<
+                std::endl;
         return false;
     }
 

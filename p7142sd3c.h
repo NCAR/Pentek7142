@@ -43,7 +43,6 @@ public:
     } DDCDECIMATETYPE;
 
     /// @brief Constructor.
-    /// @param boardNum The board number. Use ok() to verify successful construction.
     /// @param simulate Set true for simulation mode.
     /// @param tx_delay the delay for the tx pulse in seconds
     /// @param tx_pulsewidth the length of the transmit pulse in seconds
@@ -67,7 +66,6 @@ public:
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar.
     p7142sd3c(
-    		int boardNum,
     		bool simulate,
     		double tx_delay,
     		double tx_pulsewidth,

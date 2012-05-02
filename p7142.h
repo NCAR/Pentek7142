@@ -164,12 +164,14 @@ namespace Pentek {
             /// (Suggested) time to sleep after P7142 ioctl calls, in microseconds
             static const int P7142_IOCTLSLEEPUS = 100;
             
-            /// Constructor,
-            /// @param boardNum The board number.
+            /// @brief Construct a p7142 associated with the next available 
+            /// Pentek 7142 card in the system. The access order for
+            /// cards is system-dependent, and specifically affected by cards'
+            /// location on the PCI bus(es).
             /// @param simulate Set true if we operate in simulation mode.
             /// @param simPauseMS The number of milliseconds to wait,after
             /// every 100 requests for a simulated pulse number.
-            p7142(int boardNum, bool simulate = false, double simPauseMS = 50.0);
+            p7142(bool simulate = false, double simPauseMS = 50.0);
 			/// Destructor.
 			virtual ~p7142();
             /// @brief Tell if the P7142 is successfully configured and ready
@@ -334,6 +336,16 @@ namespace Pentek {
             /// Each 100 calls, sleep for simPauseMS milliseconds.
             void simWait();
             
+            /// Keep track of the PCI slot of the last instantiated p7142.
+            /// This is needed for calls to ReadyFlow's PTK714X_DeviceFindAndOpen() 
+            /// function. This variable starts at -2, and changes for each
+            /// p7142 we instantiate. (This change actually occurs at each call 
+            /// from the constructor to PTK714X_DeviceFindAndOpen()).
+            static DWORD _Next7142Slot;
+            /// Keep track of how many 7142 cards we have open (i.e., how
+            /// many instances of this class are there so far).
+            static uint16_t _NumOpenCards;
+
             /// ReadyFlow device descriptor.
             void* _deviceHandle;
             /// ReadyFlow PCI BAR0 base address.
@@ -363,8 +375,6 @@ namespace Pentek {
             /// The PCI address of the GateFlow gate generation control
             /// register. It is not clear that we need to even use this.
             volatile unsigned int *gateGenReg;
-            /// The board number.
-            int _boardNum;
             /// set true if in simulation mode
             bool _simulate;
             /// recursive mutex which provides us thread safety.

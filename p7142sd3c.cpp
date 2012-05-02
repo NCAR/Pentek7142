@@ -19,11 +19,11 @@ const unsigned int p7142sd3c::ALL_SD3C_TIMER_BITS = 0xff0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142sd3c::p7142sd3c(int boardNum, bool simulate, double tx_delay,
+p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS) :
-        p7142(boardNum, simulate, simPauseMS),
+        p7142(simulate, simPauseMS),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
         _gates(gates),

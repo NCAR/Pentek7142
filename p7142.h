@@ -144,13 +144,13 @@ namespace Pentek {
 	/// such that the pulse numbers at a given time will be identical among
 	/// channels.
 	///
-	/// Since the p7142dn downconvertors are individually instantiated, they
+	/// Since the p7142dn downconverters are individually instantiated, they
 	/// are unaware of each other and cannot coordinate pulse numbers when
 	/// operating in simulation mode. p7142 provides a mechanism for achieving this.
 	/// The downconverters consume pulse numbers provided by nextSimPulseNum(). This routine keeps
 	/// track of successive calls by each downconverter, and makes sure that they are receiving
 	/// coordinated pulse numbers. If a requesting downconverter is getting ahead of
-	/// its peers, nextSimPulseNum() will block that thread untill all of the
+	/// its peers, nextSimPulseNum() will block that thread until all of the
 	/// downconverters have requested the next pulse number.
 	///
 	/// nextSimPulseNum() will also throttle the production of pulse numbers, by
@@ -183,7 +183,7 @@ namespace Pentek {
             /// @return true iff we're in simulation mode.
             bool isSimulating() const { return _simulate; }
             /// @todo Do we need to be calling these functions? It was done in 
-            /// the Linux driver and readyflow, but they don't seem to do 
+            /// the Linux driver and ReadyFlow, but they don't seem to do 
             /// anything.
             void enableGateGen();
 
@@ -283,15 +283,15 @@ namespace Pentek {
             /// @return The number of bytes read. If an error occurs,
             /// minus one will be returned.
             int memRead(int bank, int32_t* buf, int bytes);
-            /// Borrowed shamelessly from dmem_dac.c in the readyflow examples
+            /// Borrowed shamelessly from dmem_dac.c in the ReadyFlow examples
             ///
             /// Write data to the selected DDR memory bank, using DMA Channel 7.
-            /// @param p7142Regs Pointer to the 7142 register addres table
+            /// @param p7142Regs Pointer to the 7142 register address table
             /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
             /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
             /// @param bankStartAddr Address in the bank at which to start reading
             /// @param bankDepth Number of bytes to write. Yes, BYTES
-            /// @param dataBuf Nointer to the data buffer containing the data
+            /// @param dataBuf Pointer to the data buffer containing the data
             /// @param hDev The 7142 Device Handle
             /// @returns <br>
             /// 0 - successful <br>
@@ -311,12 +311,12 @@ namespace Pentek {
             /// Lifted shamelessly from dmem_dac.c in the readyflow examples
             ///
             /// Read data to the selected DDR memory bank, using DMA Channel 7.
-            /// @param p7142Regs Pointer to the 7142 register addres table
+            /// @param p7142Regs Pointer to the 7142 register address table
             /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
             /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
             /// @param bankStartAddr Address in the bank at which to start reading
             /// @param bankDepth Number of bytes to write. Yes, BYTES
-            /// @param dataBuf Nointer to the data buffer containing the data
+            /// @param dataBuf Pointer to the data buffer containing the data
             /// @param hDev The 7142 Device Handle
             /// @returns <br>
             /// 0 - successful <br>

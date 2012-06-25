@@ -391,7 +391,7 @@ namespace Pentek {
             /// The simulation pulse number.
             uint32_t _simPulseNum;
             /// The number of downconverters waiting for a pulse number
-            int _waitingDownconverters;
+            unsigned int _waitingDownconverters;
             /// The condition variable used to block downconverters who
             /// need to wait for peers to catch up in consuming simulated
             /// pulse numbers.

@@ -65,6 +65,8 @@ public:
     /// @param externalStartTrigger If true, an external trigger source
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar.
+    /// @param simPauseMS The number of milliseconds to wait between beams
+    ///     simulated data when calling read()
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -250,6 +252,7 @@ public:
     /// SD3C, but is made available on an external pin.
     /// @param delay the delay for the timer, in seconds
     /// @param width the width for the timer pulse, in seconds
+    /// @param invert true if the timer output should be inverted
     void setGPTimer3(double delay, double width, bool invert = false);
     
     /// @brief Return the number of gates being sampled by our non-burst downconverters.

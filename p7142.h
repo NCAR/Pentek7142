@@ -193,8 +193,7 @@ namespace Pentek {
     		/// is the amount of data written to DMA by the Pentek before an interrupt
     		/// is generated indicating data should be read.
             /// @param bypassdivrate The bypass divider (decimation) rate
-            /// @param simulate Set true if we operate in simulation mode.
-            /// @param simWaveLength The wave length, in timeseries points, for the
+            /// @param simWavelength The wave length, in timeseries points, for the
             /// simulated data. See p7142Dn::read().
             /// @param sim4bytes Create 4 byte instead of 2 byte integers when
             /// in simulation mode. This simulates the output of the coherent 

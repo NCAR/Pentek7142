@@ -19,7 +19,6 @@ class p7142Dn {
     /// is the amount of data written to DMA by the Pentek before an interrupt
     /// is generated indicating data should be read.
     /// @param bypassdivrate The bypass divider (decimation) rate
-    /// @param simulate Set true if we operate in simulation mode.
     /// @param simWaveLength The wave length, in timeseries points, for the
     /// simulated data. See read().
     /// @param sim4bytes Create 4 byte instead of 2 byte integers when
@@ -86,7 +85,7 @@ class p7142Dn {
         /// @param dmaHandle The DMA handle for the source channel
         /// @param dmaChannel - number of the DMA channel generating the interrupt(0-3)
         /// @param pData - Pointer to user defined data
-        /// @param pIntResults - Pointer to the interrupt results structure
+        /// @param pIntResult - Pointer to the interrupt results structure
         static void _staticDmaHandler(
                 PVOID dmaHandle,
                 unsigned int dmaChannel,

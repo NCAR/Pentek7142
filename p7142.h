@@ -187,7 +187,7 @@ namespace Pentek {
             /// anything.
             void enableGateGen();
 
-            /// Construct and add a downconverter for one of our receiver channels.
+            /// @brief Construct and add a downconverter for one of our receiver channels.
             /// @param chanId The channel identifier (used to select /dn/*B)
     		/// @param dmaDescSize DMA descriptor size to use for this channel. This
     		/// is the amount of data written to DMA by the Pentek before an interrupt
@@ -202,13 +202,31 @@ namespace Pentek {
                     int bypassdivrate = 1, int simWavelength = 5000, 
                     bool sim4bytes = false);
             
-            /// Construct and add an upconverter for our device.
+            /// @brief Construct and add an upconverter for our device.
             /// @param sampleClockHz The DAC sample clock in Hz
             /// @param ncoFreqHz The NCO frequency in Hz
             /// @param mode The DAC CONFIG2 coarse mixer mode (See DAC5687 Data Sheet)
             virtual p7142Up* addUpconverter(
                     double sampleClockHz, double ncoFreqHz, char mode);
             
+            /// @brief Get the temperature of the signal-processing FPGA chip
+            /// on the P7142, deg C
+            ///
+            /// The temperature returned is the D2 temperature from the LM83
+            /// sensor on the P7142's board. See Section 6.3.1 and Table 6-4 in
+            /// the Pentek Operating Manual.
+            /// @return the temperature of the signal-processing FPGA chip
+            /// on the P7142, deg C
+            int fpgaTemp() const;
+
+            /// @brief Get the P7142 circuit board temperature, deg C
+            ///
+            /// The temperature returned is the D3 temperature from the LM83
+            /// sensor on the P7142's board. See Section 6.3.1 and Table 6-4 in
+            /// the Pentek Operating Manual.
+            /// @return the P7142 circuit board temperature, deg C
+            int circuitBoardTemp() const;
+
             // We make our associated downconverter and upconverter classes 
             // friends so that they have access to BAR registers, etc.
             // methods, etc.

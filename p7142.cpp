@@ -1026,4 +1026,24 @@ p7142::simWait() {
     	}
     }
 }
+//////////////////////////////////////////////////////////////////////////////////
+int
+p7142::circuitBoardTemp() const {
+    LM83_VALUES     tempMonValues;
+    /* read the LM83 temperature registers */
+    Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),
+            P7142_TWSI_ADDR_LM83, &tempMonValues);
+    // The D3 temperature sensor is on the PCB.
+    return(tempMonValues.D3Temp);
+}
+//////////////////////////////////////////////////////////////////////////////////
+int
+p7142::fpgaTemp() const {
+    LM83_VALUES     tempMonValues;
+    /* read the LM83 temperature registers */
+    Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),
+            P7142_TWSI_ADDR_LM83, &tempMonValues);
+    // The D2 temperature sensor is on the signal processing FPGA.
+    return(tempMonValues.D2Temp);
+}
 

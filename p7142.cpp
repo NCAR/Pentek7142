@@ -1029,6 +1029,11 @@ p7142::simWait() {
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142::circuitBoardTemp() const {
+    // Return a fixed value if simulating
+    if (_simulate) {
+        return(35.0);
+    }
+
     LM83_VALUES     tempMonValues;
     /* read the LM83 temperature registers */
     Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),
@@ -1039,6 +1044,11 @@ p7142::circuitBoardTemp() const {
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142::fpgaTemp() const {
+    // Return a fixed value if simulating
+    if (_simulate) {
+        return(50.0);
+    }
+
     LM83_VALUES     tempMonValues;
     /* read the LM83 temperature registers */
     Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),

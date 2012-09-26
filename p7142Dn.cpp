@@ -62,10 +62,11 @@ p7142Dn::p7142Dn(
     // Start DMA
     _start();
 
-    // Set the clock source.
-    //int clockSource = internalClock ? CLK_SRC_INTERN : CLK_SRC_FRTPAN;
-
-    /// @todo Figure out how to set the clock source to internal under ReadyFlow
+    // Set the clock source. This is pretty bogus, because currently the last downconverter
+    // instantiated sets the clock source for all of them...
+    uint32_t clockSource = internalClock ?
+            P7142_MSTR_CTRL_SEL_CLK_OSCILLATOR : P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
+    P7142_SET_MSTR_BUS_CTRL_SEL_CLK(_p7142._p7142Regs.BAR2RegAddr.masterAControl, clockSource);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

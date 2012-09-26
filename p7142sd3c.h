@@ -102,8 +102,6 @@ public:
     ///     filter parameters
     /// @param kaiserFile Name of the file containing the Kaiser
     ///     filter parameters
-    /// @param simPauseMS The number of milliseconds to wait between beams
-    ///     simulated data when calling read()
     /// @param simWaveLength The wavelength of the simulated data, in sample 
     ///     counts
     /// @param internalClock Set to true if the Pentek card's internal clock
@@ -117,7 +115,6 @@ public:
             double rx_pulse_width,
             std::string gaussianFile, 
             std::string kaiserFile,
-            double simPauseMS = 0.1,
             int simWaveLength = 5000,
             bool internalClock = false);
     

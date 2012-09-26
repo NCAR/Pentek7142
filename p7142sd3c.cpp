@@ -155,7 +155,7 @@ p7142sd3cDn*
 p7142sd3c::addDownconverter(int chanId, uint32_t dmaDescSize, 
         bool burstSampling, int tsLength, double rx_delay, 
         double rx_pulse_width, std::string gaussianFile, 
-        std::string kaiserFile, double simPauseMs, int simWavelength,
+        std::string kaiserFile, int simWavelength,
         bool internalClock) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 

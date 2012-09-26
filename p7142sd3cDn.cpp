@@ -819,7 +819,7 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
             // If the bad word can be broken into two 16-bit numbers with
             // absolute value < 32, then consider it an I and Q data word.
             // IMPORTANT NOTE: this assumes we have only noise on the channel, 
-            // hence  low I and Q values.
+            // hence low I and Q values.
             //
             // Otherwise, print the word as being interesting (likely a pulse 
             // tag).

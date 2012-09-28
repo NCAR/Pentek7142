@@ -147,7 +147,6 @@ int p7142::memWrite(int bank, int32_t* buf, int bytes) {
     int status = _ddrMemWrite (
             &_p7142Regs,
             bank,
-            0,
             bytes,
             (uint32_t*)buf,
             _deviceHandle);
@@ -168,7 +167,6 @@ int p7142::memRead(int bank, int32_t* buf, int bytes) {
     int status = _ddrMemRead (
             &_p7142Regs,
             bank,
-            0,
             bytes,
             (uint32_t*)buf,
             _deviceHandle);
@@ -429,11 +427,35 @@ p7142::_resetDCM() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
+/****************************************************************************
+ Function: _ddrMemWrite
+
+ Description: writes data to the selected DDR memory bank.  Uses DMA
+              Channel 7.
+
+ Inputs:      p7142Regs     - pointer to the 7142 register addres table
+              bank          - use defines:
+                                  P7142_DDR_MEM_BANK0
+                                  P7142_DDR_MEM_BANK1
+                                  P7142_DDR_MEM_BANK2
+              dataLen       - number bytes to write
+              dataBuf       - pointer to the data buffer containing the data
+              hDev          - 7142 Device Handle
+
+ Returns:     0 - successful
+              1 - invalid bank number
+              3 - bank depth extends past the end of the DDR bank
+              4 - DMA channel failed to open
+              5 - DMA buffer allocation failed
+              6 - semaphore creation failed
+              7 - semaphore wait timed out
+              8 - initial memory read failed
+              9 - verification of written memory failed
+****************************************************************************/
 int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
                  unsigned int    bank,
-                 unsigned int    bankStartAddr,
-                 unsigned int    bankDepth,
-                 uint32_t*        dataBuf,
+                 unsigned int    dataLen,
+                 uint32_t*       dataBuf,
                  PVOID           hDev)
 {
     PTK714X_DMA_HANDLE  *ddrDmaWriteHandle;
@@ -441,11 +463,23 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     P7142_FIFO_PARAMS    fifoParams;   /* FIFO params */
     P7142_DMA_PARAMS     dmaParams;    /* DMA params */
     P7142_DDR_MEM_PARAMS ddrMemParams; /* DDR memory params */
-    unsigned int         bankEndAddr = ((bankStartAddr + bankDepth) / 4);
+    unsigned int         bankDepth;
     int                  status;
-    unsigned int         lastAddr;
-    unsigned int         overWriteVal;
+    uint16_t             writeLenBytes;
+    uint16_t             writeLenBlocks;
 
+    // We need to write in 32-byte blocks, and we need to write at least
+    // 17 of them (544 bytes) to be consistently successful. The 17 block
+    // number was determined empirically, with multiple tests of data
+    // writes of different lengths (4-8192 bytes, in 4-byte increments)
+    // with readback to verify successful writes.
+    writeLenBlocks = (dataLen + 31) / 32 + 1;
+    if (writeLenBlocks < 17)
+        writeLenBlocks = 17;
+    // The number of bytes we'll actually write
+    writeLenBytes = writeLenBlocks * 32;
+    bankDepth = writeLenBytes / 4;   // bank addresses are in 4-byte words
+    assert((bankDepth & 0x7) == 0);
 
     /* check input parameters -------------------------------------------- */
 
@@ -455,10 +489,8 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
          (bank != P7142_DDR_MEM_BANK2)    )
         return (1);
 
-    /* check bankStartAddr and bankDepth */
-    if (bankStartAddr > P7142_DDR_MEM_BANK_BYTE_SIZE)
-        return (2);
-    if ( (bankStartAddr+bankDepth) > P7142_DDR_MEM_BANK_BYTE_SIZE)
+    /* check dataLen */
+    if (writeLenBytes > P7142_DDR_MEM_BANK_BYTE_SIZE)
         return (3);
 
 
@@ -470,16 +502,32 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
         return (4);
 
     /* allocate system memory for write data buffer */
-    status = PTK714X_DMAAllocMem(ddrDmaWriteHandle, bankDepth, &dmaBuf, (BOOL)0);
+    status = PTK714X_DMAAllocMem(ddrDmaWriteHandle, writeLenBytes, &dmaBuf, (BOOL)0);
     if (status != PTK714X_STATUS_OK)
     {
         PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
         return (5);
     }
 
-    /* copy data buffer to DMA buffer */
-    memcpy (dmaBuf.usrBuf, dataBuf, bankDepth);
+    /*
+     * Get the current contents of the memory we're about to overwrite.
+     * We do this since we often have to write more bytes than the user
+     * requested, and we don't want to change the contents beyond what we were
+     * asked to write.
+     */
+    std::vector<uint32_t> currentMemContents;
+    currentMemContents.resize(writeLenBytes / 4);
+    if (_ddrMemRead(p7142Regs, bank, writeLenBytes, currentMemContents.data(), hDev) != 0) {
+        return (8);
+    }
+    // Copy the current memory contents into the DMA buffer
+    memcpy(dmaBuf.usrBuf, currentMemContents.data(), writeLenBytes);
 
+    // Overwrite the first part of the DMA buffer with the user's content
+    memcpy(dmaBuf.usrBuf, dataBuf, dataLen);
+
+    /* Sync Io Caches*/
+    PTK714X_DMASyncIo(&dmaBuf);
 
     /* Interrupt & semaphore setup --------------------------------------- */
 
@@ -534,7 +582,6 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
                       PCI7142_DMA_CMD_STAT_DEMAND_MODE_DISABLE,
                       PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
                       2048,              /* Max Burst Count */
-
                       0);
 
     /* disable DAC buffering.  This parameter is not set by the above
@@ -547,7 +594,7 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     /* setup descriptor parameters */
     P7142DmaDescptrSetup(&(dmaParams.dmaChan[P7142_DMA_CHAN_7]),
                          P7142_DMA_DESCPTR_0,
-                         bankDepth,  /* Transfer Count bytes */
+                         writeLenBytes,  /* Transfer Count bytes */
                          PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,
                          PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_END,
                          (unsigned long)dmaBuf.kernBuf);
@@ -591,92 +638,45 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     switch (bank)
     {
         case P7142_DDR_MEM_BANK0:
-            P7142SetDdrMemCtrlParams (&ddrMemParams,
-                                      P7142_DDR_MEM_BANK_0_WRITE_MODE);
-            ddrMemParams.ddrMemBank0StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank0Depth = (bankDepth/4);
+            P7142SetDdrMemCtrlParams(&ddrMemParams,
+                    P7142_DDR_MEM_BANK_0_WRITE_MODE);
+            ddrMemParams.ddrMemBank0StartAddr = 0;
+            ddrMemParams.ddrMemBank0Depth = bankDepth;
         break;
 
         case P7142_DDR_MEM_BANK1:
-            P7142SetDdrMemCtrlParams (&ddrMemParams,
-                                      P7142_DDR_MEM_BANK_1_WRITE_MODE);
-            ddrMemParams.ddrMemBank1StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank1Depth = (bankDepth/4);
+            P7142SetDdrMemCtrlParams(&ddrMemParams,
+                    P7142_DDR_MEM_BANK_1_WRITE_MODE);
+            ddrMemParams.ddrMemBank1StartAddr = 0;
+            ddrMemParams.ddrMemBank1Depth = bankDepth;
         break;
 
         case P7142_DDR_MEM_BANK2:
-            P7142SetDdrMemCtrlParams (&ddrMemParams,
-                                      P7142_DDR_MEM_BANK_2_WRITE_MODE);
-            ddrMemParams.ddrMemBank2StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank2Depth = (bankDepth/4);
+            P7142SetDdrMemCtrlParams(&ddrMemParams,
+                    P7142_DDR_MEM_BANK_2_WRITE_MODE);
+            ddrMemParams.ddrMemBank2StartAddr = 0;
+            ddrMemParams.ddrMemBank2Depth = bankDepth;
         break;
     }
 
     /* apply the parameter table to the registers */
     P7142InitDdrMemRegs (&ddrMemParams, &(p7142Regs->BAR2RegAddr));
 
-
-    /* start the transfer, wait for completion --------------------------- */
-
     /* FIFO enable */
-    P7142_SET_FIFO_CTRL_FIFO_ENABLE(                     \
-        p7142Regs->BAR2RegAddr.ddrMemWriteFifo.FifoCtrl, \
+    P7142_SET_FIFO_CTRL_FIFO_ENABLE(
+        p7142Regs->BAR2RegAddr.ddrMemWriteFifo.FifoCtrl,
         P7142_FIFO_ENABLE);
 
     /* Sync Cpu Caches*/
     PTK714X_DMASyncCpu(&dmaBuf);
 
-    /* write to DDR memory bank */
-    P7142DmaStart(&(p7142Regs->BAR0RegAddr), P7142_DMA_CHAN_7);
-
-    /* wait for interrupt completion */
-    status = sem_wait(&ddrMemWriteSem);
-    if (status != 0)
+    /*
+     * It takes two write attempts to actually get everything written.
+     * Why is not clear, but even Pentek's example code ends up doing this...
+     */
+    for (int w = 0; w < 2; w++)
     {
-        sem_destroy(&ddrMemWriteSem);
-        PTK714X_DMAIntDisable(ddrDmaWriteHandle);
-        PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
-        PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
-        return (8);
-    }
-
-
-    /* verify that all data was written ---------------------------------- */
-
-    /* get last address so we can verify that we wrote all data */
-    P7142_GET_DDR_MEM_CAPTURE_END_ADDR(                                \
-        p7142Regs->BAR2RegAddr.ddrMem.ddrMemBankCaptEndAddr[bank].Lsb, \
-        lastAddr);
-
-    /* check read operation */
-   if (lastAddr != bankEndAddr)
-   {
-        /* determine how many extra bytes to write */
-        overWriteVal = (bankEndAddr - lastAddr) << 3;
-    	std::cout << "MEM write overwrite of " << overWriteVal << "bytes" << std::endl;
-
-        /* set up channel parameters */
-        P7142DmaChanSetup(&(dmaParams.dmaChan[P7142_DMA_CHAN_7]),
-                          PCI7142_DMA_CMD_STAT_DMA_ENABLE,
-                          PCI7142_DMA_CMD_STAT_DEMAND_MODE_DISABLE,
-                          PCI7142_DMA_CMD_STAT_DATA_WIDTH_64,
-                          2048,            /* Max Burst Count */
-                          0);
-
-        /* setup descriptor parameters */
-        P7142DmaDescptrSetup(&(dmaParams.dmaChan[P7142_DMA_CHAN_7]),
-                             P7142_DMA_DESCPTR_0,
-                             overWriteVal, /* Transfer Interval Count */
-                             PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,
-                             PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_END,
-                             (unsigned long)dmaBuf.kernBuf);
-
-        /* apply the parameters to the DMA registers */
-        P7142DmaChanInit(&(dmaParams.dmaChan[P7142_DMA_CHAN_7]),
-                         &(p7142Regs->BAR0RegAddr),
-                         P7142_DMA_CHAN_7);
-
-        /* write over-write buffer to DDR Memory Bank */
+        /* write to DDR memory bank */
         P7142DmaStart(&(p7142Regs->BAR0RegAddr), P7142_DMA_CHAN_7);
 
         /* wait for interrupt completion */
@@ -691,23 +691,38 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
         }
     }
 
-
     /* clean up and exit ------------------------------------------------- */
 
     /* disable DDR memory */
-    P7142_SET_DDR_MEM_MODE(p7142Regs->BAR2RegAddr.ddrMem.ddrMemCtrl,   \
-                           P7142_DDR_MEM_DISABLE_MODE);
+    P7142_SET_DDR_MEM_MODE(p7142Regs->BAR2RegAddr.ddrMem.ddrMemCtrl,
+            P7142_DDR_MEM_DISABLE_MODE);
 
     /* FIFO disable */
-    P7142_SET_FIFO_CTRL_FIFO_ENABLE(                                   \
-        p7142Regs->BAR2RegAddr.ddrMemWriteFifo.FifoCtrl,               \
-        P7142_FIFO_DISABLE);
+    P7142_SET_FIFO_CTRL_FIFO_ENABLE(
+            p7142Regs->BAR2RegAddr.ddrMemWriteFifo.FifoCtrl,
+            P7142_FIFO_DISABLE);
 
     /* clean up */
     sem_destroy(&ddrMemWriteSem);
     PTK714X_DMAIntDisable(ddrDmaWriteHandle);
     PTK714X_DMAFreeMem(ddrDmaWriteHandle, &dmaBuf);
     PTK714X_DMAClose(hDev, ddrDmaWriteHandle);
+
+    // Read back and verify the written memory. Call it paranoia, but it's
+    // well justified. (See the need for multiple writes above...)
+    std::vector<uint32_t> readback;
+    readback.resize(dataLen / 4);
+    if (_ddrMemRead(p7142Regs, bank, dataLen, readback.data(), hDev) != 0) {
+        return (9);
+    }
+    for (unsigned int i = 0; i < dataLen / 4; i++) {
+        if (readback[i] != dataBuf[i]) {
+            std::cerr << __PRETTY_FUNCTION__ <<
+                    ": Readback mismatch at word " <<
+                    i << " of " << dataLen / 4 << std::endl;
+            return (9);
+        }
+    }
 
     return (0);
 }
@@ -738,7 +753,7 @@ p7142::_bufset(int fd, int intbufsize, int bufN) {
 }
 
 /****************************************************************************
- Function: ddrMemRead
+ Function: _ddrMemRead
 
  Description: reads data from the selected DDR memory bank using the
               DMA Channel 8.
@@ -748,14 +763,12 @@ p7142::_bufset(int fd, int intbufsize, int bufN) {
                                   P7142_DDR_MEM_BANK0
                                   P7142_DDR_MEM_BANK1
                                   P7142_DDR_MEM_BANK2
-              bankStartAddr - address in the bank start reading
-              bankDepth     - number bytes to read
+              dataLen       - number bytes to read
               dataBuf       - pointer to the data buffer to store read data
               hDev          - 7142 Device Handle
 
  Returns:     0 - successful
               1 - invalid bank number
-              2 - invalid start address
               3 - bank depth extends past the end of the DDR bank
               4 - DMA channel failed to open
               5 - DMA buffer allocation failed
@@ -764,8 +777,7 @@ p7142::_bufset(int fd, int intbufsize, int bufN) {
 ****************************************************************************/
 int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
                 unsigned int    bank,
-                unsigned int    bankStartAddr,
-                unsigned int    bankDepth,
+                unsigned int    dataLen,
                 unsigned int   *dataBuf,
                 PVOID           hDev)
 
@@ -775,6 +787,7 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
     P7142_FIFO_PARAMS    fifoParams;   /* FIFO params */
     P7142_DMA_PARAMS     dmaParams;    /* DMA params */
     P7142_DDR_MEM_PARAMS ddrMemParams; /* DDR memory params */
+    unsigned int         readLen = 32 * ((dataLen + 31) / 32); /* Read in multiples of 32 bytes */
     int                  status;
 
 
@@ -786,10 +799,8 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
          (bank != P7142_DDR_MEM_BANK2)    )
         return (1);
 
-    /* check bankStartAddr and bankDepth */
-    if (bankStartAddr > P7142_DDR_MEM_BANK_BYTE_SIZE)
-        return (2);
-    if ( (bankStartAddr+bankDepth) > P7142_DDR_MEM_BANK_BYTE_SIZE)
+    /* check readLen */
+    if (readLen > P7142_DDR_MEM_BANK_BYTE_SIZE)
         return (3);
 
 
@@ -801,7 +812,7 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
         return (4);
 
     /* allocate system memory for read data buffer */
-    status = PTK714X_DMAAllocMem(ddrDmaReadHandle, (bankDepth + 128), &dmaBuf, (BOOL)0);
+    status = PTK714X_DMAAllocMem(ddrDmaReadHandle, readLen, &dmaBuf, (BOOL)0);
     if (status != PTK714X_STATUS_OK)
     {
         PTK714X_DMAClose(hDev, ddrDmaReadHandle);
@@ -863,7 +874,7 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
     /* setup descriptor parameters */
     P7142DmaDescptrSetup(&(dmaParams.dmaChan[P7142_DMA_CHAN_8]),
                          P7142_DMA_DESCPTR_0,
-                         (bankDepth + 128),  /* Transfer Count bytes */
+                         readLen,  /* Transfer Count bytes */
                          PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,
                          PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_END,
                          (unsigned long)dmaBuf.kernBuf);
@@ -907,50 +918,27 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
         case P7142_DDR_MEM_BANK0:
             P7142SetDdrMemCtrlParams (&ddrMemParams,
                                       P7142_DDR_MEM_BANK_0_READ_MODE);
-            ddrMemParams.ddrMemBank0StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank0Depth = /*P7142_DDR_MEM_BANK_MAX_DEPTH;*/(bankDepth/4);
-
-                        ddrMemParams.ddrMemBank1StartAddr = 0;
-            ddrMemParams.ddrMemBank1Depth     = 0;
-
-            ddrMemParams.ddrMemBank2StartAddr = 0;
-            ddrMemParams.ddrMemBank2Depth     = 0;
+            ddrMemParams.ddrMemBank0StartAddr = 0;
+            ddrMemParams.ddrMemBank0Depth = (readLen/4);
         break;
 
         case P7142_DDR_MEM_BANK1:
             P7142SetDdrMemCtrlParams (&ddrMemParams,
                                       P7142_DDR_MEM_BANK_1_READ_MODE);
-            ddrMemParams.ddrMemBank1StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank1Depth = /*P7142_DDR_MEM_BANK_MAX_DEPTH;*/(bankDepth/4);
-
-                        ddrMemParams.ddrMemBank0StartAddr = 0;
-            ddrMemParams.ddrMemBank0Depth     = 0;
-
-            ddrMemParams.ddrMemBank2StartAddr = 0;
-            ddrMemParams.ddrMemBank2Depth     = 0;
-
+            ddrMemParams.ddrMemBank1StartAddr = 0;
+            ddrMemParams.ddrMemBank1Depth = (readLen/4);
         break;
 
         case P7142_DDR_MEM_BANK2:
             P7142SetDdrMemCtrlParams (&ddrMemParams,
                                       P7142_DDR_MEM_BANK_2_READ_MODE);
-            ddrMemParams.ddrMemBank2StartAddr = bankStartAddr;
-            ddrMemParams.ddrMemBank2Depth = /*P7142_DDR_MEM_BANK_MAX_DEPTH;*/(bankDepth/4);
-
-                        ddrMemParams.ddrMemBank1StartAddr = 0;
-            ddrMemParams.ddrMemBank1Depth     = 0;
-
-            ddrMemParams.ddrMemBank0StartAddr = 0;
-            ddrMemParams.ddrMemBank0Depth     = 0;
+            ddrMemParams.ddrMemBank2StartAddr = 0;
+            ddrMemParams.ddrMemBank2Depth = (readLen/4);
         break;
     }
 
     /* apply the parameter table to the registers */
     P7142InitDdrMemRegs (&ddrMemParams, &(p7142Regs->BAR2RegAddr));
-
-    /* for debug: flood buffer with known pattern */
-    memset (dmaBuf.usrBuf, 0xA5, bankDepth);
-
 
     /* start the transfer, wait for completion --------------------------- */
 
@@ -971,8 +959,8 @@ int p7142::_ddrMemRead (P7142_REG_ADDR *p7142Regs,
     /* Sync Io Caches*/
     PTK714X_DMASyncIo(&dmaBuf);
 
-    /* copy DMA buffer to data buffer */
-    memcpy (dataBuf, dmaBuf.usrBuf, bankDepth);
+    /* copy desired bytes from DMA buffer to data buffer */
+    memcpy (dataBuf, dmaBuf.usrBuf, dataLen);
 
 
     /* clean up and exit ------------------------------------------------- */

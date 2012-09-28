@@ -301,28 +301,29 @@ namespace Pentek {
             /// minus one will be returned.
             int memRead(int bank, int32_t* buf, int bytes);
             /// Borrowed shamelessly from dmem_dac.c in the ReadyFlow examples
+            /// (but heavily modified to work with shorter write lengths and
+            /// write lengths that are not a multiple of 32 bytes)
             ///
             /// Write data to the selected DDR memory bank, using DMA Channel 7.
             /// @param p7142Regs Pointer to the 7142 register address table
             /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
             /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
             /// @param bankStartAddr Address in the bank at which to start reading
-            /// @param bankDepth Number of bytes to write. Yes, BYTES
+            /// @param dataLen Number of bytes to write. Yes, BYTES
             /// @param dataBuf Pointer to the data buffer containing the data
             /// @param hDev The 7142 Device Handle
             /// @returns <br>
             /// 0 - successful <br>
             /// 1 - invalid bank number  <br>
-            /// 2 - invalid start address  <br>
             /// 3 - bank depth extends past the end of the DDR bank <br>
             /// 4 - DMA channel failed to open <br>
             /// 5 - DMA buffer allocation failed <br>
             /// 6 - semaphore creation failed <br>
-            /// 7 - semaphore wait timed out
+            /// 7 - semaphore wait timed out <br>
+            /// 8 - verification of written memory failed
             int _ddrMemWrite (P7142_REG_ADDR* p7142Regs,
                              unsigned int    bank,
-                             unsigned int    bankStartAddr,
-                             unsigned int    bankDepth,
+                             unsigned int    dataLen,
                              unsigned int   *dataBuf,
                              PVOID           hDev);
             /// Lifted shamelessly from dmem_dac.c in the readyflow examples
@@ -331,14 +332,12 @@ namespace Pentek {
             /// @param p7142Regs Pointer to the 7142 register address table
             /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
             /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
-            /// @param bankStartAddr Address in the bank at which to start reading
-            /// @param bankDepth Number of bytes to write. Yes, BYTES
+            /// @param dataLen Number of bytes to read.
             /// @param dataBuf Pointer to the data buffer containing the data
             /// @param hDev The 7142 Device Handle
             /// @returns <br>
             /// 0 - successful <br>
             /// 1 - invalid bank number  <br>
-            /// 2 - invalid start address  <br>
             /// 3 - bank depth extends past the end of the DDR bank <br>
             /// 4 - DMA channel failed to open <br>
             /// 5 - DMA buffer allocation failed <br>
@@ -346,8 +345,7 @@ namespace Pentek {
             /// 7 - semaphore wait timed out
             int _ddrMemRead (P7142_REG_ADDR *p7142Regs,
                             unsigned int    bank,
-                            unsigned int    bankStartAddr,
-                            unsigned int    bankDepth,
+                            unsigned int    dataLen,
                             unsigned int   *dataBuf,
                             void*           hDev);
             /// Each 100 calls, sleep for simPauseMS milliseconds.

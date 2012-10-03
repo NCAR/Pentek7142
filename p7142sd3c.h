@@ -200,7 +200,13 @@ public:
 
     /// @brief Return the DDC type instantiated in our card's firmware
     /// @return the DDC type instantiated in our card's firmware
-    DDCDECIMATETYPE ddcType();
+    DDCDECIMATETYPE ddcType() const { return(_ddcType); }
+
+    /// @brief Return the DDC decimation factor associated with the currently
+    /// loaded firmware.
+    /// @return the DDC decimation factor associated with the currently
+    /// loaded firmware.
+    uint16_t ddcDecimation() const;
     
     /// @brief Return the name of the firmware DDC type
     /// @return the name of the firmware DDC type
@@ -403,11 +409,7 @@ protected:
     void loadFreeRun();
 
     /// @return The sd3c firmware revision number.
-    int sd3cRev();
-
-    /// @return The sd3c DDC type and software repository revision
-    /// number, as read from the FPGA.
-    unsigned int sd3cTypeAndRev();
+    int sd3cRev() const { return(_sd3cRev); }
 
     /**
      * Simple class to hold integer delay and width for a timer.
@@ -435,6 +437,18 @@ protected:
     /// @return operating mode: free run, pulse tag and coherent integration.
     OperatingMode _operatingMode() const { return _mode; }
     
+    /// @return The sd3c DDC type and software repository revision
+    /// number, as read from the FPGA.
+    unsigned int _sd3cTypeAndRev();
+
+    /// @brief Unpack the DDC type instantiated in our card's firmware
+    /// @return the DDC type instantiated in our card's firmware
+    DDCDECIMATETYPE _unpackDdcType();
+
+    /// @brief Unpack the SD3C firmware revision number.
+    /// @return the unpacked sd3c firmware revision number.
+    int _unpackSd3cRev();
+
     /// Pointer to the sd3c transceiver control register in the fpga.
     uint32_t* tcvrCtrlReg;
 

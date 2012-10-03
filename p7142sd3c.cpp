@@ -46,7 +46,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 		_ddcType = simulateDDCType;
 	} else {
 		_sd3cRev = sd3cRev();
-		_ddcType = ddcType();
+		_ddcType = _unpackDdcType();
 	}
 
     // Set the ADC clock rate based on DDC type
@@ -351,7 +351,7 @@ void p7142sd3c::TTLOut(unsigned short int data) {
 }
 
 //////////////////////////////////////////////////////////////////////
-unsigned int p7142sd3c::sd3cTypeAndRev() {
+unsigned int p7142sd3c::_sd3cTypeAndRev() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
@@ -366,13 +366,13 @@ unsigned int p7142sd3c::sd3cTypeAndRev() {
 }
 
 //////////////////////////////////////////////////////////////////////
-int p7142sd3c::sd3cRev() {
+int p7142sd3c::_unpackSd3cRev() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return _simulateDDCType;
 
-    unsigned int ddcTypeAndRev = sd3cTypeAndRev();
+    unsigned int ddcTypeAndRev = _sd3cTypeAndRev();
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
@@ -383,13 +383,13 @@ int p7142sd3c::sd3cRev() {
 }
 
 //////////////////////////////////////////////////////////////////////
-p7142sd3c::DDCDECIMATETYPE p7142sd3c::ddcType() {
+p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
         return _simulateDDCType;
     
-    unsigned int ddcTypeAndRev = sd3cTypeAndRev();
+    unsigned int ddcTypeAndRev = _sd3cTypeAndRev();
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After that it's a 2-bit value in bits 14-15.
@@ -637,7 +637,24 @@ std::string p7142sd3c::ddcTypeName(DDCDECIMATETYPE type) {
 //////////////////////////////////////////////////////////////////////
 std::string p7142sd3c::ddcTypeName() const
 {
-	return ddcTypeName(_ddcType);
+    return ddcTypeName(_ddcType);
+}
+
+//////////////////////////////////////////////////////////////////////
+uint16_t p7142sd3c::ddcDecimation() const
+{
+    switch (_ddcType) {
+    case DDC10DECIMATE:
+        return(10);
+    case DDC8DECIMATE:
+        return(8);
+    case DDC4DECIMATE:
+        return(4);
+    case BURST:
+        return(1);
+    default:
+        return(0);
+    }
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -56,11 +56,15 @@ p7142sd3cDn::p7142sd3cDn(
     // Convert our rx delay and width to counts.
     int rxDelayCounts = _sd3c.timeToCounts(rx_delay);
     int rxPulsewidthCounts = _sd3c.timeToCounts(rx_pulsewidth);
-    if (rxPulsewidthCounts == 0) {
-        std::cerr << "Rx pulsewidth of " << rx_pulsewidth << " seconds " <<
-                "for channel " << _chanId << 
-                " is zero counts @ ADC clock freq of " << _sd3c.adcFrequency() <<
-                " Hz!" << std::endl;
+
+    // Make sure the rx_pulsewidth is a multiple of the time per decimated
+    // sample.
+    if (rxPulsewidthCounts == 0 ||
+            ((2 * rxPulsewidthCounts) % _sd3c.ddcDecimation()) != 0) {
+        std::cerr << "rx_pulsewidth (digitizer_sample_width) must be a " <<
+                "non-zero multiple of " <<
+                1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
+                " ns for " << _sd3c.ddcTypeName() << std::endl;
         abort();
     }
 

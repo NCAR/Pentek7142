@@ -45,7 +45,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 		_sd3cRev = 1;
 		_ddcType = simulateDDCType;
 	} else {
-		_sd3cRev = sd3cRev();
+		_sd3cRev = _unpackSd3cRev();
 		_ddcType = _unpackDdcType();
 	}
 

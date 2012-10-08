@@ -68,6 +68,18 @@ p7142sd3cDn::p7142sd3cDn(
         abort();
     }
 
+    // PRT must be a multiple of the pulse width and longer than
+    // (gates + 1) * pulse width
+    if ((_sd3c.prtCounts() % rxPulsewidthCounts) ||
+            (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
+        std::cerr << "PRT is " << _sd3c.prt() << " (" << _sd3c.prtCounts() <<
+                "), rx pulse width is " << rx_pulsewidth << " (" <<
+                rxPulsewidthCounts << "), gates is " << _sd3c.gates() <<
+                "." << std::endl;
+        std::cerr << "PRT must be greater than (gates+1)*(rx pulse width).";
+        abort();
+    }
+
     // Set the rx gating timer. 
     // Note that Channels 0 and 1 share RX_01_TIMER, and channels 2 and 3 
     // share RX_23_TIMER.

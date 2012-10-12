@@ -171,7 +171,9 @@ namespace Pentek {
             /// @param simulate Set true if we operate in simulation mode.
             /// @param simPauseMS The number of milliseconds to wait,after
             /// every 100 requests for a simulated pulse number.
-            p7142(bool simulate = false, double simPauseMS = 50.0);
+            /// @param useFirstCard If true, use the first card in the system. Otherwise,
+            /// the next card will be searched for.
+            p7142(bool simulate = false, double simPauseMS = 50.0, bool useFirstCard=false);
 			/// Destructor.
 			virtual ~p7142();
             /// @brief Tell if the P7142 is successfully configured and ready

@@ -67,6 +67,8 @@ public:
     ///     radar.
     /// @param simPauseMS The number of milliseconds to wait between beams
     ///     simulated data when calling read()
+    /// @param useFirstCard If true, use the first card in the system. Otherwise,
+    ///     the next card will be searched for.
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -79,7 +81,9 @@ public:
     		bool freeRun,
     		DDCDECIMATETYPE simulateDDCType,
     		bool externalStartTrigger = false,
-    		double simPauseMS = 50);
+    		double simPauseMS = 50,
+    		bool useFirstCard = false
+    		);
     
     /// Destructor.
     virtual ~p7142sd3c();

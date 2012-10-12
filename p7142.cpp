@@ -50,7 +50,7 @@ DWORD p7142::_Next7142Slot = -2;
 uint16_t p7142::_NumOpenCards = 0;
 
 ////////////////////////////////////////////////////////////////////////////////////////
-p7142::p7142(bool simulate, double simPauseMS):
+p7142::p7142(bool simulate, double simPauseMS, bool useFirstCard):
 _cardIndex(_NumOpenCards),
 _simulate(simulate),
 _p7142Mutex(),
@@ -61,13 +61,17 @@ _waitingDownconverters(0),
 _simWaitCounter(0),
 _simPauseMS(simPauseMS)
 {
-
 	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
-    // If we're simulating, things are simple...
+
+	// If we're simulating, things are simple...
     if (_simulate) {
         _isReady = true;
     } else {
     	// initialize ReadyFlow
+    	if (useFirstCard) {
+    		// we have been explicitly told to find the first card.
+    		_Next7142Slot = -2;
+    	}
     	_isReady = _initReadyFlow();
     }
     // If we were successful, increment the open card count

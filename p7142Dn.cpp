@@ -134,15 +134,13 @@ p7142Dn::_simulatedRead(char* buf, int bufsize) {
     int nPairs = bufsize / bytesPerPair;
 
     for (int p = 0; p < nPairs; p++) {
-        // Noisy sine wave, with wavelength of _simWaveLength gates
-        // The wavelength varies across the range
+        // Noisy sine wave
         if (_angleCount == _simWaveLength) {
             _angleCount = 0;
         }
         double angle = ((double)_angleCount++)/ _simWaveLength;
-        // noise is +/-10% amplitude
-        double iNoise = 0.1 * ((2.0 * rand()) / RAND_MAX - 1.0);
-        double qNoise = 0.1 * ((2.0 * rand()) / RAND_MAX - 1.0);
+        double iNoise = 0.4 * ((2.0 * rand()) / RAND_MAX - 1.0);
+        double qNoise = 0.4 * ((2.0 * rand()) / RAND_MAX - 1.0);
         double I = 10000 * (sin((2 * angle * M_PI)) + iNoise);
         double Q = 10000 * (cos((2 * angle * M_PI)) + qNoise);
         if (_sim4bytes) {

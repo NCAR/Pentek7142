@@ -469,7 +469,7 @@ int p7142::_ddrMemWrite (P7142_REG_ADDR* p7142Regs,
     P7142_DDR_MEM_PARAMS ddrMemParams; /* DDR memory params */
     unsigned int         bankDepth;
     int                  status;
-    uint16_t             writeLenBytes;
+    uint32_t             writeLenBytes;
     uint16_t             writeLenBlocks;
 
     // We need to write in 32-byte blocks, and we need to write at least

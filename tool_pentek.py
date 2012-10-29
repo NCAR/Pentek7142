@@ -46,11 +46,10 @@ SingleMutex.h
 """)
 
 libpentek = env.Library('pentek', libsources)
+Default(libpentek)
 
 html = env.Apidocs(libsources + headers, DOXYFILE_DICT={'PROJECT_NAME':'pentek', 'PROJECT_NUMBER':'1.0'})
-
-Default(libpentek, html)
-Default(libpentek)
+Default(html)
 
 thisdir = env.Dir('.').srcnode().abspath
 def pentek(env):

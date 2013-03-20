@@ -216,6 +216,8 @@ p7142::_initReadyFlow() {
     {
         std::cerr << "Pentek card " << _NumOpenCards + 1 << " is not a 7142!" <<
                 std::endl;
+        std::cerr << "Expected 0x" << std::hex << P7142_MODULE_ID << 
+           ", and got 0x" << _moduleId << std::dec << std::endl;
         return false;
     }
 

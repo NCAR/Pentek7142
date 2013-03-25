@@ -25,7 +25,6 @@ LOGGING("toggleP7142LEDs")
 #include "p7142Up.h"
 
 using namespace std;
-using namespace XmlRpc;
 using namespace boost::posix_time;
 namespace po = boost::program_options;
 
@@ -45,7 +44,7 @@ void parseOptions(int argc, char** argv)
   po::options_description descripts("Options");
   descripts.add_options()
     ("help", "Describe options")
-    ("nChans", po::value<int>(&_nChans), "No.dof channels (default 2)")
+    ("nChans", po::value<int>(&_chans), "No. of channels (default 2)")
     ("waitSecs", po::value<double>(&_waitSecs), 
      "Wait between toggles (secs) (default 5)")
     ;

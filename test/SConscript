@@ -2,6 +2,7 @@
 
 tools = Split("""
 pentek
+rapradar
 qtt_qtconfig
 boost_date_time
 boost_program_options
@@ -31,5 +32,7 @@ dacdump = env.Program('dacdump', 'dacdump.cpp')
 
 toggle_7142_leds = env.Program('toggle_7142_leds', 'toggle_7142_leds.cpp')
 
-Default(capture, dactest, dacdump, toggle_7142_leds, html)
+# TODO dacdump does not currently compile!
+#Default(capture, dactest, dacdump, toggle_7142_leds, html)
+Default(capture, dactest, toggle_7142_leds, html)
 

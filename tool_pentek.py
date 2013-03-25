@@ -56,8 +56,10 @@ def pentek(env):
     env.AppendUnique(CPPPATH   =[thisdir,])
     env.AppendLibrary('pentek')
     env.AppendLibrary('boost_thread-mt')
+    env.AppendLibrary('pthread')
     env.AppendDoxref('pentek')
     env.Require(tools)
 
 Export('pentek')
 
+SConscript("test/SConscript")

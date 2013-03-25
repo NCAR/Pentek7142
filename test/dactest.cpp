@@ -11,7 +11,8 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "p7142sd3c.h"
+#include "p7142.h"
+#include "p7142Up.h"
 
 #define BASICSIZE   1024
 
@@ -43,7 +44,7 @@ int main(int argc, char** argv) {
 	char mode           = atoi(argv[5]);
 
 	// create the p7142 and its upconverter
-	Pentek::p7142 card(devRoot, 65536, false);
+	Pentek::p7142 card(65536, false);
 	Pentek::p7142Up & upConverter = *card.addUpconverter(sampleRate, ncoFreq, mode);
 
 	// create the signal

@@ -13,6 +13,7 @@ sources = Split("""
 capture.cpp
 dactest.cpp
 dacdump.cpp
+toggle_7142_leds.cpp
 """)
 
 headers = Split("""
@@ -28,5 +29,7 @@ dactest = env.Program('dactest', 'dactest.cpp')
 
 dacdump = env.Program('dacdump', 'dacdump.cpp')
 
-Default(capture, dactest, dacdump, html)
+toggle_7142_leds = env.Program('toggle_7142_leds', 'toggle_7142_leds.cpp')
+
+Default(capture, dactest, dacdump, toggle_7142_leds, html)
 

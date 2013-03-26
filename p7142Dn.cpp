@@ -139,8 +139,8 @@ p7142Dn::_simulatedRead(char* buf, int bufsize) {
             _angleCount = 0;
         }
         double angle = ((double)_angleCount++)/ _simWaveLength;
-        double iNoise = 0.4 * ((2.0 * rand()) / RAND_MAX - 1.0);
-        double qNoise = 0.4 * ((2.0 * rand()) / RAND_MAX - 1.0);
+        double iNoise = 5.0 * ((2.0 * rand()) / RAND_MAX - 1.0);
+        double qNoise = 5.0 * ((2.0 * rand()) / RAND_MAX - 1.0);
         double I = 10000 * (sin((2 * angle * M_PI)) + iNoise);
         double Q = 10000 * (cos((2 * angle * M_PI)) + qNoise);
         if (_sim4bytes) {

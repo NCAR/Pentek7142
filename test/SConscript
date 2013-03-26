@@ -8,6 +8,7 @@ boost_date_time
 boost_program_options
 doxygen
 qt4
+logx
 """)
 
 sources = Split("""

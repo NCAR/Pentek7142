@@ -50,8 +50,9 @@ void parseOptions(int argc, char** argv)
     ;
 
   po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv)
-            .options(descripts).positional(pd).run(), vm);
+  po::command_line_parser parser(argc, argv);
+  po::positional_options_description pd;
+  po::store(parser.options(descripts).positional(pd).run(), vm);
   po::notify(vm);
   
   if (vm.count("help")) {
@@ -129,29 +130,29 @@ main(int argc, char** argv)
   // are broken between client and server
   signal(SIGPIPE, SIG_IGN);
   
+  // volatile unsigned int  cntr;
+  // volatile unsigned int  dataVal;
+  // unsigned int           imageSize;
+  // volatile unsigned int  regVal;
+  // volatile unsigned int  retVal;
+  // volatile unsigned int  *virtexReg;
+  
+  /* Initialize the library */
+
+  DWORD dwStatus = PTK714X_LibInit();
+  if (PTK714X_STATUS_OK != dwStatus) {
+    return (exitHandler (2, NULL));
+  }
+  
   // Find and open the next PTK714X device
   // user will be asked to pick the device num
   
-  volatile unsigned int  cntr;
-  volatile unsigned int  dataVal;
-  unsigned int           imageSize;
-  volatile unsigned int  regVal;
-  volatile unsigned int  retVal;
-  volatile unsigned int  *virtexReg;
-  
-  /* Initialize the library */
-  DWORD dwStatus = PTK714X_LibInit();
-  if (PTK714X_STATUS_OK != dwStatus) {
-    return (exitHandler (2, NULL, BootProgram, infile));
-  }
-  
-  /* Find and open the 7142 */
   DWORD BAR0Base;
   DWORD BAR2Base;
   DWORD slot = -1; // forces user interaction if more than 1 pentek
   void *hDev = PTK714X_DeviceFindAndOpen(&slot, &BAR0Base, &BAR2Base);
   if (hDev == NULL) {
-    return (exitHandler (3, hDev, BootProgram, infile));
+    return (exitHandler (3, hDev));
   }
 
   /* Initialize the 7142 register address table */

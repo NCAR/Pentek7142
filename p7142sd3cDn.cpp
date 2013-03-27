@@ -76,7 +76,9 @@ p7142sd3cDn::p7142sd3cDn(
                 "), rx pulse width is " << rx_pulsewidth << " (" <<
                 rxPulsewidthCounts << "), gates is " << _sd3c.gates() <<
                 "." << std::endl;
-        std::cerr << "PRT must be greater than (gates+1)*(rx pulse width).";
+        std::cerr << "PRT must be greater than (gates+1)*(rx pulse width): " 
+                  << (_sd3c.gates() * rx_pulsewidth)
+                  << std::endl;
         abort();
     }
 

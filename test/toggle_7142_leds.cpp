@@ -25,8 +25,8 @@ namespace po = boost::program_options;
 
 LOGGING("toggleP7142LEDs")
 
-int _chans = 2; ///< number of channels
-double _waitSecs = 5.0;  ///< Wait between ids (secs)
+int _nToggles = 5; ///< number of times leds are toggled
+double _waitSecs = 0.5;  ///< Wait between ids (secs)
 
 //////////////////////////////////////////////////////////////////////
 //
@@ -41,9 +41,10 @@ void parseOptions(int argc, char** argv)
   po::options_description descripts("Options");
   descripts.add_options()
     ("help", "Describe options")
-    ("nChans", po::value<int>(&_chans), "No. of channels (default 2)")
+    ("nToggles", po::value<int>(&_nToggles),
+     "No. of times lights are toggled (default 5)")
     ("waitSecs", po::value<double>(&_waitSecs), 
-     "Wait between toggles (secs) (default 5)")
+     "Wait between toggles (secs) (default 0.5)")
     ;
 
   po::variables_map vm;
@@ -156,11 +157,6 @@ main(int argc, char** argv)
   P7142_REG_ADDR p7142Regs;  /* 7142 register table */
   P7142InitRegAddr(BAR0Base, BAR2Base, &p7142Regs);
 
-  cerr << "111111 hDev: " << hex << hDev << dec << endl;
-  cerr << "111111 slot: " << hex << slot << dec << endl;
-  cerr << "111111 BAR0Base: " << hex << BAR0Base << dec << endl;
-  cerr << "111111 BAR2Base: " << hex << BAR2Base << dec << endl;
-  
   P7142_BAR0_REG_ADDR bar0 = p7142Regs.BAR0RegAddr;
   P7142_BAR2_REG_ADDR bar2 = p7142Regs.BAR2RegAddr;
   
@@ -175,12 +171,17 @@ main(int argc, char** argv)
     return false;
   }
 
-  cout << "Pentek 7142 device";
-  cout << " BAR0: " << hex << (void *)BAR0Base;
-  cout << " BAR2: " << hex << (void *)BAR2Base;
-  cout << dec;
-  cout << endl;
+  // print status
 
+  cerr << "Pentek 7142 device";
+  cerr << "  device: " << hex << hDev << endl;
+  cerr << "  slot: " << dec << slot << endl;
+  cerr << "  BAR0Base: " << hex << (void *)BAR0Base;
+  cerr << "  BAR2Base: " << hex << (void *)BAR2Base;
+  cerr << dec;
+  cerr << endl;
+
+  // get master bus controls
 
   uint32_t masterBusAControl;
   P7142_REG_READ(BAR2Base + P7142_MASTER_BUS_A_CONTROL, masterBusAControl);
@@ -188,6 +189,7 @@ main(int argc, char** argv)
   uint32_t masterBusBControl;
   P7142_REG_READ(BAR2Base + P7142_MASTER_BUS_B_CONTROL, masterBusBControl);
 
+  cerr << "Initial state:" << endl;
   cerr << "  masterBusAControl: " << hex << masterBusAControl << endl;
   cerr << "  masterBusBControl: " << hex << masterBusBControl << endl;
   cerr << dec;
@@ -200,21 +202,29 @@ main(int argc, char** argv)
   uint32_t offA = masterBusAControl | 0x00000001;
   uint32_t offB = masterBusBControl | 0x00000001;
 
-  for (int ii = 0; ii < 10; ii++) {
+  useconds_t sleepTime = (int) (_waitSecs * 1.0e6);
 
+  for (int ii = 0; ii < _nToggles; ii++) {
+
+    cerr << "--->> Toggling bus master on" << endl;
+    
     P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, onA);
     P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, onB);
 
-    usleep(500000);
+    usleep(sleepTime);
 
+    cerr << "--->> Toggling bus master off" << endl;
+    
     P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, offA);
     P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, offB);
 
-    usleep(500000);
+    usleep(sleepTime);
 
   }
 
   // reset to the initial state
+    
+  cerr << "--->> Resetting to initial state" << endl;
     
   P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, masterBusAControl);
   P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, masterBusBControl);

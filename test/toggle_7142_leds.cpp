@@ -9,17 +9,12 @@
 #include <ctime>
 #include <cerrno>
 #include <cstdlib>
+#include <unistd.h>
 #include <boost/program_options.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <csignal>
 #include <logx/Logging.h>
 #include <toolsa/pmu.h>
-
-LOGGING("toggleP7142LEDs")
-
-// For configuration management
-
-#include <QtConfig.h>
 
 #include "p7142sd3c.h"
 #include "p7142Up.h"
@@ -27,6 +22,8 @@ LOGGING("toggleP7142LEDs")
 using namespace std;
 using namespace boost::posix_time;
 namespace po = boost::program_options;
+
+LOGGING("toggleP7142LEDs")
 
 int _chans = 2; ///< number of channels
 double _waitSecs = 5.0;  ///< Wait between ids (secs)
@@ -56,9 +53,9 @@ void parseOptions(int argc, char** argv)
   po::notify(vm);
   
   if (vm.count("help")) {
-    std::cout << "Usage: " << argv[0] << 
-      " [OPTION]..." << std::endl;
-    std::cout << descripts << std::endl;
+    cout << "Usage: " << argv[0] << 
+      " [OPTION]..." << endl;
+    cout << descripts << endl;
     exit(0);
   }
   
@@ -154,12 +151,160 @@ main(int argc, char** argv)
   if (hDev == NULL) {
     return (exitHandler (3, hDev));
   }
-
+  
   /* Initialize the 7142 register address table */
   P7142_REG_ADDR p7142Regs;  /* 7142 register table */
   P7142InitRegAddr(BAR0Base, BAR2Base, &p7142Regs);
+
+  cerr << "111111 hDev: " << hex << hDev << dec << endl;
+  cerr << "111111 slot: " << hex << slot << dec << endl;
+  cerr << "111111 BAR0Base: " << hex << BAR0Base << dec << endl;
+  cerr << "111111 BAR2Base: " << hex << BAR2Base << dec << endl;
+  
+  P7142_BAR0_REG_ADDR bar0 = p7142Regs.BAR0RegAddr;
+  P7142_BAR2_REG_ADDR bar2 = p7142Regs.BAR2RegAddr;
+  
+  /* check if module is a 7142 */
+  unsigned int moduleId;
+  P7142_GET_MODULE_ID(p7142Regs.BAR2RegAddr.idReadout, moduleId);
+  if (moduleId != P7142_MODULE_ID) {
+    cerr << "Pentek card " << slot + 1 << " is not a 7142!" <<
+      endl;
+    cerr << "Expected 0x" << hex << P7142_MODULE_ID << 
+      ", and got 0x" << moduleId << dec << endl;
+    return false;
+  }
+
+  cout << "Pentek 7142 device";
+  cout << " BAR0: " << hex << (void *)BAR0Base;
+  cout << " BAR2: " << hex << (void *)BAR2Base;
+  cout << dec;
+  cout << endl;
+
+
+  uint32_t masterBusAControl;
+  P7142_REG_READ(BAR2Base + P7142_MASTER_BUS_A_CONTROL, masterBusAControl);
+  
+  uint32_t masterBusBControl;
+  P7142_REG_READ(BAR2Base + P7142_MASTER_BUS_B_CONTROL, masterBusBControl);
+
+  cerr << "  masterBusAControl: " << hex << masterBusAControl << endl;
+  cerr << "  masterBusBControl: " << hex << masterBusBControl << endl;
+  cerr << dec;
+
+  // toggle master control on and off, to toggle LEDs
+
+  uint32_t onA = masterBusAControl & 0xfffffffe;
+  uint32_t onB = masterBusBControl & 0xfffffffe;
+
+  uint32_t offA = masterBusAControl | 0x00000001;
+  uint32_t offB = masterBusBControl | 0x00000001;
+
+  for (int ii = 0; ii < 10; ii++) {
+
+    P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, onA);
+    P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, onB);
+
+    usleep(500000);
+
+    P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, offA);
+    P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, offB);
+
+    usleep(500000);
+
+  }
+
+  // reset to the initial state
+    
+  P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_A_CONTROL, masterBusAControl);
+  P7142_REG_WRITE(BAR2Base + P7142_MASTER_BUS_B_CONTROL, masterBusBControl);
+
+  // return
 
   return (exitHandler (0, hDev));
   
 }
 
+#ifdef JUNK_FOR_NOW
+
+  cerr << "0000000 pciIntrFlag: " << *bar0.pciIntrFlag << endl;
+  for (int ii = 0; ii < 4; ii++) {
+    cerr << "0000000 pciIntrEnable[" << ii << "]: " << *bar0.pciIntrEnable[ii] << endl;
+  }
+  cerr << "0000000 fpgaDataIn: " << *bar0.fpgaDataIn << endl;
+  cerr << "0000000 fpagDataOut: " << *bar0.fpagDataOut << endl;
+  cerr << "0000000 bdChanReset: " << *bar0.bdChanReset << endl;
+  cerr << "0000000 fpgaRevision: " << *bar0.fpgaRevision << endl;
+  cerr << "0000000 virtexConfig: " << *bar0.virtexConfig << endl;
+  cerr << "0000000 pciDcmControl: " << *bar0.pciDcmControl << endl;
+  cerr << "0000000 localDmaReqStatus: " << *bar0.localDmaReqStatus << endl;
+  cerr << "0000000 pciBusStatus: " << *bar0.pciBusStatus << endl;
+  cerr << "0000000 dmaPciIntrEna: " << *bar0.dmaPciIntrEna << endl;
+  cerr << "0000000 lclDmaInRemap: " << *bar0.lclDmaInRemap << endl;
+  cerr << "0000000 lclDmaOutRemap: " << *bar0.lclDmaOutRemap << endl;
+  cerr << "0000000 dmaCommand: " << *bar0.dmaCommand << endl;
+  for (int ii = 0; ii < 9; ii++) {
+    cerr << "0000000 dmaCurrXferCounter[" << ii << "]: " << *bar0.dmaCurrXferCounter[ii] << endl;
+    cerr << "0000000 dmaCurrPciAddr[" << ii << "]: " << *bar0.dmaCurrPciAddr[ii] << endl;
+    cerr << "0000000 dmaCommandStatus[" << ii << "]: " << *bar0.dmaCommandStatus[ii] << endl;
+    cerr << "0000000 dmaXferIntervalCounter[" << ii << "]: " << *bar0.dmaXferIntervalCounter[ii] << endl;
+  }
+  
+  cerr << "222222 idReadout: " << *bar2.idReadout << endl;
+  cerr << "222222 idReadout: " << *bar2.idReadout << endl;
+  cerr << "222222 twsiPort: " << *bar2.twsiPort << endl;
+  cerr << "222222 dcmControl: " << *bar2.dcmControl << endl;
+  cerr << "222222 miscControl: " << *bar2.miscControl << endl;
+  cerr << "222222 fpgaRevision1: " << *bar2.fpgaRevision1 << endl;
+  cerr << "222222 fpgaRevision2: " << *bar2.fpgaRevision2 << endl;
+  cerr << "222222 coreOption: " << *bar2.coreOption << endl;
+  cerr << "222222 gblRegControl: " << *bar2.gblRegControl << endl;
+  cerr << "222222 masterAControl: " << *bar2.masterAControl << endl;
+  cerr << "222222 syncAGen: " << *bar2.syncAGen << endl;
+  cerr << "222222 gateAGen: " << *bar2.gateAGen << endl;
+  cerr << "222222 masterBControl: " << *bar2.masterBControl << endl;
+  cerr << "222222 syncBGen: " << *bar2.syncBGen << endl;
+  cerr << "222222 gateBGen: " << *bar2.gateBGen << endl;
+  cerr << "222222 syncMask: " << *bar2.syncMask << endl;
+  cerr << "222222 sysIntrEnable: " << *bar2.sysIntrEnable << endl;
+  cerr << "222222 sysIntrFlag: " << *bar2.sysIntrFlag << endl;
+  cerr << "222222 sysIntrStatus: " << *bar2.sysIntrStatus << endl;
+  cerr << "222222 appIntrLintEnable[0]: " << *bar2.appIntrLintEnable[0] << endl;
+  cerr << "222222 appIntrLintEnable[1]: " << *bar2.appIntrLintEnable[1] << endl;
+  cerr << "222222 appIntrLintEnable[2]: " << *bar2.appIntrLintEnable[2] << endl;
+  cerr << "222222 appIntrLintEnable[3]: " << *bar2.appIntrLintEnable[3] << endl;
+  cerr << "222222 appIntrFlag: " << *bar2.appIntrFlag << endl;
+  cerr << "222222 appIntrStatus: " << *bar2.appIntrStatus << endl;
+  cerr << "222222 dacSyncBusSel: " << *bar2.dacSyncBusSel << endl;
+  cerr << "222222 dacCtrlStat: " << *bar2.dacCtrlStat << endl;
+  
+  cerr << "222222 dacFifo.FifoCtrl: " << *bar2.dacFifo.FifoCtrl << endl;
+  //P7142_LSB_MSB_PAIR_REG_ADDR  dacFifo.FifoTrigLen;           /* ADC & DDC only */
+  cerr << "222222 dacFifo.FifoIntrMask: " << *bar2.dacFifo.FifoIntrMask << endl;
+  cerr << "222222 dacFifo.FifoAELevel: " << *bar2.dacFifo.FifoAELevel << endl;
+  cerr << "222222 dacFifo.FifoAFLevel: " << *bar2.dacFifo.FifoAFLevel << endl;
+  cerr << "222222 dacFifo.FifoStatus: " << *bar2.dacFifo.FifoStatus << endl;
+  // P7142_LSB_MSB_PAIR_REG_ADDR dacFifo.FifoPostTrigDlyLength; /* ADC & DDC only */
+  // P7142_LSB_MSB_PAIR_REG_ADDR dacFifo.FifoPreTrigCountCapt;  /* ADC only */
+  cerr << "222222 &dacFifo.FifoDecimationDivide: " << hex << bar2.dacFifo.FifoDecimationDivide << dec << endl;
+  
+  cerr << "222222 dac5686Read: " << *bar2.dac5686Read << endl;
+  cerr << "222222 dac5686Write: " << *bar2.dac5686Write << endl;
+  // P7142_DDR_MEM_REG_ADDR    ddrMem;
+  // P7142_FIFO_CTRL_REG_ADDR  ddrMemReadFifo;
+  // P7142_FIFO_CTRL_REG_ADDR  ddrMemWriteFifo;
+  cerr << "222222 adcSyncBusSel: " << *bar2.adcSyncBusSel << endl;
+  // P7142_FIFO_CTRL_REG_ADDR  adcFifo[4];
+  // P7142_FIFO_CTRL_REG_ADDR  gbLinkInFifo;
+  // P7142_FIFO_CTRL_REG_ADDR  gbLinkOutFifo;
+  // P7142_FIFO_CTRL_REG_ADDR  testFifo;
+#ifdef P7142_DDC_CORE
+  cerr << "222222 coreDdcBase: " << *bar2.coreDdcBase << endl;
+  cerr << "222222 coreFiltAccess: " << *bar2.coreFiltAccess << endl;
+  cerr << "222222 coreDdcFiltBase: " << *bar2.coreDdcFiltBase << endl;
+#endif
+#ifdef P7142_INTERP_CORE
+  cerr << "222222 coreInterpBase: " << *bar2.coreInterpBase << endl;
+#endif
+  
+#endif

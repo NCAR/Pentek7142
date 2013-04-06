@@ -4,6 +4,9 @@
 #include <sys/ioctl.h>
 #include <iostream>
 
+#include <logx/Logging.h>
+LOGGING("Pentek");
+
 namespace Pentek {
     
 using namespace boost::posix_time;
@@ -112,32 +115,38 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     int txDelayCounts = timeToCounts(tx_delay);
     int pulseWidthCounts = timeToCounts(tx_pulsewidth);
     setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts);
-    
-    std::cout << "downconverter: " << ddcTypeName(_ddcType) << std::endl;
-    std::cout << "tx delay:      " << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts"  << std::endl;
-    std::cout << "tx pulse width:" << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts"   << std::endl;
-    std::cout << "prt:           " << _prtCounts       << " adc_clock/2 counts"   << std::endl;
-    std::cout << "prt2:          " << _prt2Counts      << " adc_clock/2 counts"   << std::endl;
-    std::cout << "staggered:     " << ((_staggeredPrt) ? "true" : "false")        << std::endl;
-    std::cout << "gates:         " << _gates                                      << std::endl;
-    std::cout << "nsum:          " << _nsum                                       << std::endl;
-    std::cout << "free run:      " << ((_freeRun) ? "true" : "false")             << std::endl;
-    std::cout << "adc clock:     " << _adc_clock       << " Hz"                   << std::endl;
-    std::cout << "prf:           " << _prf             << " Hz"                   << std::endl;
-    std::cout << "data rate:     " << dataRate()/1.0e3 << " KB/s"                 << std::endl;
 
-    //    std::cout << "rx 0/1 delay:  " << _timerDelay(RX_01_TIMER) << " adc_clock/2 counts"  << std::endl;
-    //    std::cout << "rx 0/1 width:  " << _timerWidth(RX_01_TIMER) << " adc_clock/2 counts"   << std::endl;
-    //    std::cout << "rx 2/3 delay:  " << _timerDelay(RX_23_TIMER) << " adc_clock/2 counts"  << std::endl;
-    //    std::cout << "rx 2/3 width:  " << _timerWidth(RX_23_TIMER) << " adc_clock/2 counts"   << std::endl;
-    //    std::cout << "clock source:  " << (usingInternalClock() ? "internal" : "external") << std::endl;
-    //    std::cout << "ts length:     " << _tsLength                                   << std::endl;
-    //    std::cout << "sim usleep     " << _simPauseMS*1000 << "us"                    <<std::endl;
-	//    for (int i = 0; i < 8; i++) {
-	//        std::cout << "timer " << i << " delay: " << _timerDelay(i) << " adc_clock/2 counts"  << std::endl;
-	//        std::cout << "timer " << i << " width: " << _timerWidth(i) << " adc_clock/2 counts"  << std::endl;
-	//    }
-    
+    // log startup params in debug mode
+
+    DLOG << "=============================";
+
+    DLOG << "p7142sd3c constructor";
+    DLOG << "  downconverter: " << ddcTypeName(_ddcType);
+    DLOG << "  simulate: " << simulate;
+    DLOG << "  tx_dely: " << tx_delay;
+    DLOG << "  tx_pulsewidth: " << tx_pulsewidth;
+    DLOG << "  prt: " << prt;
+    DLOG << "  prt2: " << prt2;
+    DLOG << "  staggeredPrt: " << staggeredPrt;
+    DLOG << "  gates: " << gates;
+    DLOG << "  nsum: " << nsum;
+    DLOG << "  freeRun: " << ((freeRun) ? "true" : "false");
+    DLOG << "  simulateDDCType: " << simulateDDCType;
+    DLOG << "  externalStartTrigger: " << externalStartTrigger;
+    DLOG << "  simPauseMS: " << simPauseMS;
+    DLOG << "  useFirstCard: " << useFirstCard;
+
+    DLOG << "  tx delay:      " << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts" ;
+    DLOG << "  tx pulse width:" << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts";
+    DLOG << "  prtCounts:     " << _prtCounts       << " adc_clock/2 counts";
+    DLOG << "  prt2Counts:    " << _prt2Counts      << " adc_clock/2 counts";
+    DLOG << "  staggered:     " << ((_staggeredPrt) ? "true" : "false");
+    DLOG << "  adc clock:     " << _adc_clock << " Hz";
+    DLOG << "  prf:           " << _prf << " Hz";
+    DLOG << "  data rate:     " << dataRate()/1.0e3 << " KB/s";
+
+    DLOG << "=============================";
+
     // reset the FPGA clock managers. Necessary since some of our
     // new DCMs in the firmware use the CLKFX output, which won't
     // lock at startup.
@@ -203,6 +212,13 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
     }
 
     _timerConfigs[ndx] = _TimerConfig(delay, width, invert);
+
+    DLOG << "--------------------------";
+    DLOG << "Setting up timer, ndx: " << ndx;
+    DLOG << "  delay: " << delay;
+    DLOG << "  width: " << width;
+    DLOG << "  invert: " << invert;
+    DLOG << "--------------------------";
 }
 
 //////////////////////////////////////////////////////////////////////////////////

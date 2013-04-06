@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <csignal>
 
+#include <logx/Logging.h>
+LOGGING("Pentek");
+
 using namespace Pentek;
 
 ////////////////////////////////////////////////////////////////////////////////////////

@@ -10,6 +10,9 @@
 #include <sstream>
 #include <iomanip>
 
+#include <logx/Logging.h>
+LOGGING("Pentek");
+
 using namespace boost::posix_time;
 
 namespace Pentek {
@@ -53,6 +56,23 @@ p7142sd3cDn::p7142sd3cDn(
     _gates = _sd3c.gates();
     _nsum = _sd3c.nsum();
     
+    // log startup params in debug mode
+
+    DLOG << "+++++++++++++++++++++++++++++";
+    DLOG << "p7142sd3cDn constructor";
+    DLOG << "  chanId: " << chanId;
+    DLOG << "  burstSampling: " << burstSampling;
+    DLOG << "  tsLength: " << tsLength;
+    DLOG << "  rx_dely: " << rx_delay;
+    DLOG << "  rx_pulsewidth: " << rx_pulsewidth;
+    DLOG << "  gaussianFile: " << gaussianFile;
+    DLOG << "  kaiserFile: " << kaiserFile;
+    DLOG << "  simWaveLength: " << simWaveLength;
+    DLOG << "  internalClock: " << internalClock;
+    DLOG << "  gates: " << _gates;
+    DLOG << "  nsum: " << _nsum;
+    DLOG << "++++++++++++++++++++++++++++";
+
     // Convert our rx delay and width to counts.
     int rxDelayCounts = _sd3c.timeToCounts(rx_delay);
     int rxPulsewidthCounts = _sd3c.timeToCounts(rx_pulsewidth);

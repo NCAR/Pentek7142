@@ -299,7 +299,6 @@ void p7142sd3c::timersStartStop(bool start) {
             P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
             usleep(p7142::P7142_IOCTLSLEEPUS);
             ptime afterStart(microsec_clock::universal_time());
-            DLOG << "Time after start: " << afterStart;
         } else {
             // Internal trigger: timers start immediately.
             setXmitStartTime(now);

@@ -70,7 +70,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     }
 
     // Announce the FPGA firmware revision
-    std::cout << "SD3C revision: " << std::dec << _sd3cRev << std::endl;
+    DLOG << "SD3C revision: " << std::dec << _sd3cRev;
     if (_sd3cRev == 0) {
         std::cerr << "** WARNING: Revision number is zero. " <<
                 "Was the correct firmware loaded?" << std::endl;
@@ -92,11 +92,11 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     	P7142_REG_WRITE(_BAR2Base + RADAR_GATES, gates);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (_BAR2Base + RADAR_GATES, temp);
-    	std::cout << "gate readback is " << temp <<std::endl;
+    	DLOG << "gate readback is " << temp;
     	P7142_REG_WRITE(_BAR2Base + CI_NSUM, nsum);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (_BAR2Base + CI_NSUM, temp);
-    	std::cout << "nsum readback is " << temp << std::endl;
+    	DLOG << "nsum readback is " << temp;
     }
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
@@ -274,6 +274,7 @@ void p7142sd3c::timersStartStop(bool start) {
     // Actually start or stop the timers now
     //
     if (start) {
+        DLOG << "About to start timers: " << now;
         if (_externalStartTrigger) {
             // We assume here that the external trigger is a 1 PPS signal, 
             // e.g., from GPS.
@@ -291,22 +292,25 @@ void p7142sd3c::timersStartStop(bool start) {
             setXmitStartTime(now + microseconds(1000000 + sleep_uSec - wake_uSec));
             // Now sleep
             usleep(sleep_uSec);
+            ptime beforeStart(microsec_clock::universal_time());
+            DLOG << "Time just before start: " << beforeStart;
             // Set the wait-for-trigger bit so timers start at the next
             // trigger.
             P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | GPS_EN);
             usleep(p7142::P7142_IOCTLSLEEPUS);
+            ptime afterStart(microsec_clock::universal_time());
+            DLOG << "Time after start: " << afterStart;
         } else {
             // Internal trigger: timers start immediately.
             setXmitStartTime(now);
             P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS | ADDR_TRIG);
             usleep(p7142::P7142_IOCTLSLEEPUS);
         }
-        
-        std::cout << "Timers/radar start time " << _xmitStartTime << std::endl;
+        DLOG << "Timers/radar start time " << _xmitStartTime;
     } else {
     	P7142_REG_WRITE(_BAR2Base + MT_ADDR, ALL_SD3C_TIMER_BITS);
         usleep(p7142::P7142_IOCTLSLEEPUS);
-        std::cout << "Timers stopped at " << now << std::endl;
+        DLOG << "Timers stopped at " << now;
     }
     
     // Turn off Write Strobes
@@ -325,7 +329,7 @@ void p7142sd3c::startFilters() {
     P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_START);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
-    std::cout << "filters enabled" << std::endl;
+    DLOG << "filters enabled";
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -497,7 +501,7 @@ p7142sd3c::initTimers() {
         PrtScheme = 0x0000;
     }
 
-    std::cout << "periodCount is " << periodCount << std::endl;
+    DLOG << "periodCount is " << periodCount;
 
     // Control Register
     P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
@@ -512,10 +516,10 @@ p7142sd3c::initTimers() {
     usleep(p7142::P7142_IOCTLSLEEPUS);
     
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
-        std::cout << "Initializing timer " << i << ": delay " <<
-            countsToTime(timerDelay(i)) << "s (" << timerDelay(i) <<
-            "), width " << countsToTime(timerWidth(i)) << "s (" << 
-            timerWidth(i) << ")" << (timerInvert(i)? ", inverted":"") << std::endl;
+        DLOG << "Initializing timer " << i << ": delay " <<
+          countsToTime(timerDelay(i)) << "s (" << timerDelay(i) <<
+          "), width " << countsToTime(timerWidth(i)) << "s (" << 
+          timerWidth(i) << ")" << (timerInvert(i)? ", inverted":"");
         
         // Delay Register
         // Address

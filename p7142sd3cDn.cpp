@@ -90,16 +90,18 @@ p7142sd3cDn::p7142sd3cDn(
 
     // PRT must be a multiple of the pulse width and longer than
     // (gates + 1) * pulse width
-    if ((_sd3c.prtCounts() % rxPulsewidthCounts) ||
-            (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
+    if (!_isBurst) {
+      if ((_sd3c.prtCounts() % rxPulsewidthCounts) ||
+          (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
         std::cerr << "PRT is " << _sd3c.prt() << " (" << _sd3c.prtCounts() <<
-                "), rx pulse width is " << rx_pulsewidth << " (" <<
-                rxPulsewidthCounts << "), gates is " << _sd3c.gates() <<
-                "." << std::endl;
+          "), rx pulse width is " << rx_pulsewidth << " (" <<
+          rxPulsewidthCounts << "), gates is " << _sd3c.gates() <<
+          "." << std::endl;
         std::cerr << "PRT must be greater than (gates+1)*(rx pulse width): " 
                   << (_sd3c.gates() * rx_pulsewidth)
                   << std::endl;
         abort();
+      }
     }
 
     // Set the rx gating timer. 

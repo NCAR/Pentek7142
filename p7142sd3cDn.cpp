@@ -22,14 +22,14 @@ p7142sd3cDn::p7142sd3cDn(
 		p7142sd3c * p7142sd3cPtr,
 		int chanId,
 		uint32_t dmaDescSize,
-        bool isBurst,
-        int tsLength,
-        double rx_delay,
-        double rx_pulsewidth,
-        std::string gaussianFile,
-        std::string kaiserFile,
-        int simWaveLength,
-        bool internalClock) :
+                bool isBurst,
+                int tsLength,
+                double rx_delay,
+                double rx_pulsewidth,
+                std::string gaussianFile,
+                std::string kaiserFile,
+                int simWaveLength,
+                bool internalClock) :
         p7142Dn(p7142sd3cPtr, 
                 chanId, 
                 dmaDescSize,
@@ -97,12 +97,16 @@ p7142sd3cDn::p7142sd3cDn(
              << rxPulsewidthCounts << ", " << _sd3c.prtCounts();
         abort();
       }
-      if ((_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
-        ELOG << "PRT is " << _sd3c.prt() << " (" << _sd3c.prtCounts() <<
-          "), rx pulse width is " << rx_pulsewidth << " (" <<
-          rxPulsewidthCounts << "), gates is " << _sd3c.gates() << ".";
-        ELOG << "PRT must be greater than (gates+1)*(rx pulse width): " 
-             << (_sd3c.gates() * rx_pulsewidth);
+      if (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts)) {
+        ELOG << "PRT ERROR";
+        ELOG << "PRT: " << _sd3c.prt() << " sec, "
+             <<  _sd3c.prtCounts() << " counts";
+        ELOG << "rx pulse width: " << rx_pulsewidth << " sec, "
+             << rxPulsewidthCounts << " counts";
+        ELOG << "n gates: " << _sd3c.gates();
+        ELOG << "rx pulse width: " << rx_pulsewidth;
+        ELOG << "PRT must be greater than (gates+1)*(rx pulse width)";
+        ELOG << "Min valid PRT: " << ((_sd3c.gates()+1) * rx_pulsewidth);
         abort();
       }
     }

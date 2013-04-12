@@ -22,7 +22,7 @@ p7142sd3cDn::p7142sd3cDn(
 		p7142sd3c * p7142sd3cPtr,
 		int chanId,
 		uint32_t dmaDescSize,
-        bool burstSampling,
+        bool isBurst,
         int tsLength,
         double rx_delay,
         double rx_pulsewidth,
@@ -38,7 +38,7 @@ p7142sd3cDn::p7142sd3cDn(
                 p7142sd3cPtr->nsum() > 1,
                 internalClock),
         _sd3c(*p7142sd3cPtr),
-        _isBurst(burstSampling),
+        _isBurst(isBurst),
         _tsLength(tsLength),
         _gaussianFile(gaussianFile), 
         _kaiserFile(kaiserFile),
@@ -61,9 +61,9 @@ p7142sd3cDn::p7142sd3cDn(
     DLOG << "+++++++++++++++++++++++++++++";
     DLOG << "p7142sd3cDn constructor";
     DLOG << "  chanId: " << chanId;
-    DLOG << "  burstSampling: " << burstSampling;
+    DLOG << "  isBurst: " << isBurst;
     DLOG << "  tsLength: " << tsLength;
-    DLOG << "  rx_dely: " << rx_delay;
+    DLOG << "  rx_delay: " << rx_delay;
     DLOG << "  rx_pulsewidth: " << rx_pulsewidth;
     DLOG << "  gaussianFile: " << gaussianFile;
     DLOG << "  kaiserFile: " << kaiserFile;
@@ -81,25 +81,28 @@ p7142sd3cDn::p7142sd3cDn(
     // sample.
     if (rxPulsewidthCounts == 0 ||
             ((2 * rxPulsewidthCounts) % _sd3c.ddcDecimation()) != 0) {
-        std::cerr << "rx_pulsewidth (digitizer_sample_width) must be a " <<
-                "non-zero multiple of " <<
-                1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
-                " ns for " << _sd3c.ddcTypeName() << std::endl;
-        abort();
+      ELOG << "rx_pulsewidth (digitizer_sample_width) must be a " <<
+        "non-zero multiple of " <<
+        1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
+        " ns for " << _sd3c.ddcTypeName();
+      abort();
     }
-
+    
     // PRT must be a multiple of the pulse width and longer than
     // (gates + 1) * pulse width
     if (!_isBurst) {
-      if ((_sd3c.prtCounts() % rxPulsewidthCounts) ||
-          (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
-        std::cerr << "PRT is " << _sd3c.prt() << " (" << _sd3c.prtCounts() <<
+      if ((_sd3c.prtCounts() % rxPulsewidthCounts)) {
+        ELOG << "Rx pulse width must divide into PRT";
+        ELOG << "rxPulsewidthCounts, prtCounts: "
+             << rxPulsewidthCounts << ", " << _sd3c.prtCounts();
+        abort();
+      }
+      if ((_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts))) {
+        ELOG << "PRT is " << _sd3c.prt() << " (" << _sd3c.prtCounts() <<
           "), rx pulse width is " << rx_pulsewidth << " (" <<
-          rxPulsewidthCounts << "), gates is " << _sd3c.gates() <<
-          "." << std::endl;
-        std::cerr << "PRT must be greater than (gates+1)*(rx pulse width): " 
-                  << (_sd3c.gates() * rx_pulsewidth)
-                  << std::endl;
+          rxPulsewidthCounts << "), gates is " << _sd3c.gates() << ".";
+        ELOG << "PRT must be greater than (gates+1)*(rx pulse width): " 
+             << (_sd3c.gates() * rx_pulsewidth);
         abort();
       }
     }

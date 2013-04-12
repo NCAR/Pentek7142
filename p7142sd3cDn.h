@@ -101,7 +101,7 @@ public:
     /// @param dmaDescSize DMA descriptor size to use for this channel. This
     ///     is the amount of data written to DMA by the Pentek before an interrupt
     ///     is generated indicating data should be read.
-    /// @param burstSampling Set true if burst sampling should be used for this 
+    /// @param isBurst Set true if burst sampling should be used for this 
     ///     channel. Burst sampling implies that gates will be as short as the 
     ///     card's sampling clock will allow. The rx_pulsewidth and the sampling
     ///     clock frequency will determine the number of gates sampled.
@@ -121,7 +121,7 @@ public:
         p7142sd3c * p7142sd3cPtr, 
         int chanId,
         uint32_t dmaDescSize,
-        bool burstSampling,
+        bool isBurst,
         int tsLength,
         double rx_delay, 
         double rx_pulsewidth,

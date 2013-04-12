@@ -123,7 +123,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "p7142sd3c constructor";
     DLOG << "  downconverter: " << ddcTypeName(_ddcType);
     DLOG << "  simulate: " << simulate;
-    DLOG << "  tx_dely: " << tx_delay;
+    DLOG << "  tx_delay: " << tx_delay;
     DLOG << "  tx_pulsewidth: " << tx_pulsewidth;
     DLOG << "  prt: " << prt;
     DLOG << "  prt2: " << prt2;

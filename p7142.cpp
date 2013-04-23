@@ -107,7 +107,7 @@ p7142::~p7142() {
     /* If there are no instances left, close up the ReadyFlow library */
     if (_NumOpenCards == 0) {
         PTK714X_LibUninit();
-        std::cout << "ReadyFlow closed" << std::endl;
+        DLOG << "ReadyFlow closed";
     }
 }
 

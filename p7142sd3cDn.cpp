@@ -11,7 +11,7 @@
 #include <iomanip>
 
 #include <logx/Logging.h>
-LOGGING("Pentek");
+LOGGING("p7142sd3cDn");
 
 using namespace boost::posix_time;
 
@@ -171,11 +171,11 @@ p7142sd3cDn::p7142sd3cDn(
                 std::endl;
         abort();
     }
-    std::cout << "bypass decim: " << bypassDivider() << std::endl;
+    DLOG << "bypass decim: " << bypassDivider();
     
     // configure DDC in FPGA
     if (!config()) {
-        std::cout << "error initializing filters\n";
+        DLOG << "error initializing filters";
     }
 
 }
@@ -227,8 +227,8 @@ bool p7142sd3cDn::config() {
     _sd3c.stopFilters();
 
     // Is coherent integration enabled?
-    std::cout << "coherent integration is " <<
-          (_nsum > 1 ? "enabled" : "disabled") << std::endl;
+    DLOG << "coherent integration is " <<
+          (_nsum > 1 ? "enabled" : "disabled");
 
     // set up the filters. Will do nothing if either of
     // the filter file paths is empty or if this is a burst channel
@@ -252,7 +252,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // program the kaiser coefficients
 
     bool kaiserFailed = false;
-    
+    std::ostringstream stream;
     for (unsigned int i = 0; i < kaiser.size(); i++) {
 
         // Set up to write this coefficient
@@ -314,32 +314,34 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             if (readBack == kaiser[i]) {
                 coeffLoaded = true;
                 if (attempt != 0) {
-                    std::cout << ":" << std::hex << readBack << std::dec <<
-                            " -- OK" << std::endl;
+                    DLOG << ":" << std::hex << readBack << std::dec <<
+                            " -- OK";
                 }
                 break;
             } else {
                 if (attempt == 0) {
-                    std::cout << "kaiser[" << i << "] = " << std::hex <<
-                            kaiser[i] << ", readbacks: " << readBack <<
-                            std::dec;
+                    stream.str().clear();
+                    stream << "kaiser[" << i << "] = " << std::hex <<
+                      kaiser[i] << ", readbacks: " << readBack <<
+                      std::dec;
                 } else {
-                    std::cout << ":" << std::hex << readBack << std::dec;
+                    stream << ":" << std::hex << readBack << std::dec;
                 }
             }
         }
         if (! coeffLoaded) {
-            std::cout << " -- FAILED!" << std::endl;
+            stream << " -- FAILED!";
+            DLOG << stream.str();
         }
         
         kaiserFailed |= !coeffLoaded;
     }
 
     if (!kaiserFailed) {
-        std::cout << kaiser.size()
-                << " Kaiser filter coefficients successfully loaded" << std::endl;
+        DLOG << kaiser.size()
+                << " Kaiser filter coefficients successfully loaded";
     } else {
-        std::cout << "Unable to load the Kaiser filter coefficients" << std::endl;
+        DLOG << "Unable to load the Kaiser filter coefficients";
     }
 
     // program the gaussian coefficients
@@ -347,7 +349,6 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // address register, which was done during the previous kaiser filter load.
 
     bool gaussianFailed = false;
-    
     for (unsigned int i = 0; i < gaussian.size(); i++) {
 
         // Set up to write this coefficient
@@ -414,36 +415,38 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             if (readBack == gaussian[i]) {
                 coeffLoaded = true;
                 if (attempt != 0) {
-                    std::cout << ":" << std::hex << readBack << std::dec <<
-                            " -- OK" << std::endl;
+                    DLOG << ":" << std::hex << readBack << std::dec <<
+                            " -- OK";
                 }
                 break;
             } else {
                 if (attempt == 0) {
-                    std::cout << "gaussian[" << i << "] = " << std::hex <<
-                            gaussian[i] << ", readbacks: " << readBack <<
-                            std::dec;
+                  stream.str().clear();
+                    stream << "gaussian[" << i << "] = " << std::hex <<
+                      gaussian[i] << ", readbacks: " << readBack <<
+                      std::dec;
                 } else {
-                    std::cout << ":" << std::hex << readBack << std::dec;
+                    stream << ":" << std::hex << readBack << std::dec;
                 }
             }
         }
         if (! coeffLoaded) {
-            std::cout << " -- FAILED!" << std::endl;
+          stream << " -- FAILED!";
+          DLOG << stream.str();
         }
         
         gaussianFailed |= !coeffLoaded;
     }
 
     if (!gaussianFailed) {
-        std::cout << gaussian.size()
-                << " Gaussian filter coefficients successfully loaded" << std::endl;
+        DLOG << gaussian.size()
+                << " Gaussian filter coefficients successfully loaded";
     } else {
-        std::cout << "Unable to load the Gaussian filter coefficients" << std::endl;
+        DLOG << "Unable to load the Gaussian filter coefficients";
     }
 
     // return to decimal output
-    std::cout << std::dec;
+    DLOG << std::dec;
 
     return !kaiserFailed && !gaussianFailed;
 
@@ -544,8 +547,8 @@ int p7142sd3cDn::filterSetup() {
             abort();
         }
         gaussian = FilterSpec(builtins[gaussianFilterName]);
-        std::cout << "Using gaussian filter coefficient set "
-                << gaussianFilterName << std::endl;
+        DLOG << "Using gaussian filter coefficient set "
+             << gaussianFilterName;
     }
 
     // get the kaiser filter coefficients
@@ -589,12 +592,11 @@ int p7142sd3cDn::filterSetup() {
             abort();
         }
         kaiser = FilterSpec(builtins[kaiserFilterName]);
-        std::cout << "Using kaiser filter coefficient set " << kaiserFilterName
-                << std::endl;
+        DLOG << "Using kaiser filter coefficient set " << kaiserFilterName;
     }
 
-    std::cout << "Kaiser filter will be programmed for " << kaiserBandwidth
-            << " MHz bandwidth\n";
+    DLOG << "Kaiser filter will be programmed for " << kaiserBandwidth
+         << " MHz bandwidth";
 
     // load the filter coefficients
 
@@ -736,7 +738,7 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
 
     // Handle pulse number rollover gracefully
     if (_lastPulse == MAX_PT_PULSE_NUM) {
-        std::cout << "Pulse number rollover on channel " << chanId() << std::endl;
+        DLOG << "Pulse number rollover on channel " << chanId();
         _lastPulse = -1;
     }
 
@@ -929,7 +931,7 @@ p7142sd3cDn::ciBeamDecoded(int64_t& nPulsesSinceStart) {
         // that erroneously has zero for a pulse tag. Perhaps there
         // is a better algorithm for this.
         if (pulseNum == 0)
-            std::cout << "Pulse number rollover" << std::endl;
+            DLOG << "Pulse number rollover";
 
         delta += MAX_CI_PULSE_NUM + 1;
 
@@ -1068,11 +1070,15 @@ p7142sd3cDn::ciMakeTag(int format, int chan, bool odd, bool Q, uint32_t seq) {
     		(( format << 4 | chan << 2 | Odd << 1 | IQ) << 24) | (seq & 0xffffff);
 
     return tag;
+    
+    std::ostringstream stream;
+    stream << "format: " << format << " chan:" << chan 
+           << " odd:" << odd << " Q:" << Q;
+    stream.width(8);
+    stream.fill('0');
+    stream << std::hex << tag;
+    DLOG << stream.str();
 
-    std::cout << "format: " << format << " chan:" << chan << " odd:" << odd << " Q:" << Q << std::endl;
-    std::cout.width(8);
-    std::cout.fill('0');
-    std::cout << std::hex << tag <<std::endl;
     return tag;
 }
 
@@ -1094,12 +1100,15 @@ p7142sd3cDn::ciDecodeTag(uint32_t tag, int& format, int& chan, bool& odd, bool& 
 
     return;
 
-    std::cout << "decoded format: " << format << " chan:"
-            << chan << " odd:" << odd << " Q:" << Q
-            << " seq:" << seq << std::endl;
-    std::cout.width(8);
-    std::cout.fill('0');
-    std::cout << "decoded tag:" << std::hex << tag << std::dec << std::endl;
+    std::ostringstream stream;
+    stream << "decoded format: " << format << " chan:"
+           << chan << " odd:" << odd << " Q:" << Q
+           << " seq:" << seq;
+    stream.width(8);
+    stream.fill('0');
+    stream << "decoded tag:" << std::hex << tag << std::dec;
+    DLOG << stream.str();
+
     return;
 }
 
@@ -1274,15 +1283,17 @@ p7142sd3cDn::syncErrors() {
 void
 p7142sd3cDn::dumpSimFifo(std::string label, int n) {
     //boost::recursive_mutex::scoped_lock guard(_mutex);
-    std::cout << label <<  " _simFifo length: " << _simFifo.size() << std::endl;
-    std::cout << std::hex;
+    std::ostringstream out;
+    out << label <<  " _simFifo length: " << _simFifo.size() << std::endl;
+    out << std::hex;
     for (unsigned int i = 0; i < (unsigned int)n && i < _simFifo.size(); i++) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)_simFifo[i] << " ";
+        out << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)_simFifo[i] << " ";
         if (!((i+1) % 40)) {
-            std::cout << std::endl;
+            out << std::endl;
         }
     }
-    std::cout << std::dec << std::endl;;
+    out << std::dec;
+    DLOG << out;
 }
 
 } // end namespace Pentek

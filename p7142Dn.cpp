@@ -10,6 +10,9 @@
 #include <cstring>
 #include <sys/ioctl.h>
 
+#include <logx/Logging.h>
+LOGGING("p7142Dn");
+
 using namespace Pentek;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -35,9 +38,9 @@ p7142Dn::p7142Dn(
 {
     // dma buffer size must be a multiple of 4
     if ((_DmaDescSize % 4) || (_DmaDescSize <= 0)) {
-        std::cout <<"DMA descriptor size must be a positive  multiple of 4 bytes, " << 
-            _DmaDescSize << " was specified" << std::endl;
-        abort();
+      ELOG << "DMA descriptor size must be a positive  multiple of 4 bytes, "
+           <<  _DmaDescSize << " was specified";
+      abort();
     }
 
     boost::recursive_mutex::scoped_lock guard(_mutex);
@@ -97,12 +100,11 @@ p7142Dn::read(char* buf, int bufsize) {
     // or 0 bytes if 1 is requested.
     // If we are to support other read sizes, we'll have to be a lot smarter, 
     // and keep around a buffer of up to 3 unconsumed bytes between calls here. 
-    // For now, we are not that smart...
+    // or now, we are not that smart...
     if ((bufsize % 4) != 0) {
-        std::cerr << __PRETTY_FUNCTION__ << ": " << bufsize << 
-                " bytes requested, but Pentek reads must be a multiple of 4 bytes!" <<
-                std::endl;
-        abort();
+      ELOG << __PRETTY_FUNCTION__ << ": " << bufsize << 
+        " bytes requested, but Pentek reads must be a multiple of 4 bytes!";
+      abort();
     }
 
     int n = isSimulating() ? _simulatedRead(buf, bufsize) : _read(buf, bufsize);
@@ -213,8 +215,8 @@ p7142Dn::_initDma() {
     // open a DMA channel (required before we allocate the buffer)
     int status = PTK714X_DMAOpen(_p7142._deviceHandle, _chanId, &_dmaHandle);
     if (status != PTK714X_STATUS_OK) {
-        std::cerr << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << 
-            _chanId << std::endl;
+        ELOG << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << 
+          _chanId;
         abort();
     }
     // allocate DMA buffers, one per channel/descriptor pair.
@@ -222,9 +224,9 @@ p7142Dn::_initDma() {
         status = PTK714X_DMAAllocMem(_dmaHandle, _DmaDescSize, 
                 &_dmaBuf[d], (BOOL)0);
         if (status != PTK714X_STATUS_OK) {
-            std::cerr << __PRETTY_FUNCTION__ << 
+            ELOG << __PRETTY_FUNCTION__ << 
             ": Unable to allocate a DMA buffer for channel " << _chanId << 
-            "/descriptor " << d << std::endl;
+            "/descriptor " << d;
             // Exit via INT signal, in hopes that cleanup will occur
             raise(SIGINT);
         }
@@ -277,8 +279,8 @@ p7142Dn::_initDma() {
 
     status = P7142InitDmaRegs(&_p7142._p7142DmaParams, &(_p7142._p7142Regs.BAR0RegAddr));
     if (status != 0) {
-        std::cerr << "Error " << status << 
-        " initializing DMA registers for channel " << _chanId << std::endl;
+        ELOG << "Error " << status << 
+          " initializing DMA registers for channel " << _chanId;
     }
 }
 
@@ -293,9 +295,9 @@ p7142Dn::_staticDmaHandler(
         PTK714X_INT_RESULT *pIntResult)
 {
     ///if (pIntResult->intLost > 0) {
-    ///    std::cout << "On channel " << dmaChannel << " w/intLost = " <<
+    ///    DLOG << "On channel " << dmaChannel << " w/intLost = " <<
     ///    pIntResult->intLost << ", flag is 0x" << std::hex <<
-    ///    pIntResult->intFlag << std::dec << std::endl;
+    ///    pIntResult->intFlag << std::dec;
     ///}
     // Cast the user data to p7142Dn*
     p7142Dn * downconverter = static_cast<p7142Dn *>(pData);
@@ -320,7 +322,7 @@ p7142Dn::_dmaInterrupt() {
         msgStream << "ERROR! Channel " << _chanId << 
             " wants to read descriptor " << _nextDesc << 
             " while DMA is in progress there! Likely overrun!\n";
-        std::cerr << msgStream.str();
+        ELOG << msgStream.str();
         // Skip reading this descriptor, since the old data we want is being
         // overwritten right now!
         _nextDesc = (_nextDesc + 1) % 4;
@@ -336,7 +338,7 @@ p7142Dn::_dmaInterrupt() {
         if (_freeBuffers.empty()) {
             msgStream << "Dropping data on channel " << _chanId << 
                 ", no free buffers available!\n";
-            std::cerr << msgStream.str();
+            ELOG << msgStream.str();
             break;
         }
 
@@ -362,7 +364,7 @@ p7142Dn::_dmaInterrupt() {
         msgStream.clear();
         msgStream << "On channel " << _chanId << ", read " << nBufsRead << 
             " DMA buffers at once\n";
-        std::cerr << msgStream.str();
+        ELOG << msgStream.str();
     }
 
 }
@@ -425,10 +427,10 @@ void
 p7142Dn::_start() {
 
     if (_adcActive) {
-        std::cerr << __FILE__ << ":" << __FUNCTION__ << ":" << 
-            " trying to start ADC channel " << _chanId <<
-            " when it is already active" << std::endl;
-        return;
+      ELOG << __FILE__ << ":" << __FUNCTION__ << ":" << 
+        " trying to start ADC channel " << _chanId <<
+        " when it is already active";
+      return;
     }
 
 
@@ -451,13 +453,12 @@ p7142Dn::_start() {
                                    (PTK714X_INT_HANDLER)_staticDmaHandler);
 
     if (status != PTK714X_STATUS_OK) {
-        std::cerr << __FILE__ << ":" << __FUNCTION__ << 
-            ": Unable to enable DMA interrupt for channel " << _chanId << 
-            std::endl;
-        raise(SIGINT);
+      ELOG << __FILE__ << ":" << __FUNCTION__ << 
+        ": Unable to enable DMA interrupt for channel " << _chanId;
+      raise(SIGINT);
     }
 
-    std::cout << "DMA interrupt enabled for channel " << _chanId << std::endl;
+    DLOG << "DMA interrupt enabled for channel " << _chanId;
 
     // Enable the DMA. Transfers will not occur however until the GateFlow
     // FIFOs start receiveing data, which will take place when the sd3c
@@ -471,8 +472,8 @@ p7142Dn::_start() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p7142Dn::_stop() {
-    std::cout << "Halting DMA for card " << _p7142._cardIndex << "/channel " << 
-        _chanId << " and freeing resources" << std::endl;
+    DLOG << "Halting DMA for card " << _p7142._cardIndex << "/channel " << 
+      _chanId << " and freeing resources";
     if (_p7142.isSimulating()) {
         return;
     }
@@ -489,27 +490,27 @@ p7142Dn::_stop() {
     /* Disable DMA Interrupt for this channel */
     status = PTK714X_DMAIntDisable(_dmaHandle);
     if (status != PTK714X_STATUS_OK) {
-        std::cerr << __FILE__ << ":" << __FUNCTION__ <<
-                ": DMA interrupt disable failed" << std::endl;
+      ELOG << __FILE__ << ":" << __FUNCTION__ <<
+        ": DMA interrupt disable failed";
     }
-
+    
     for (int desc = 0; desc < 4; desc++) {
-        status = PTK714X_DMAFreeMem(_dmaHandle, &_dmaBuf[desc]);
+      status = PTK714X_DMAFreeMem(_dmaHandle, &_dmaBuf[desc]);
         if (status != PTK714X_STATUS_OK) {
-            std::cerr << __FILE__ << ":" << __FUNCTION__ <<
-               ": DMA memory free failed" << std::endl;
+          ELOG << __FILE__ << ":" << __FUNCTION__ <<
+            ": DMA memory free failed";
         }
     }
 
     status = PTK714X_DMAClose(_p7142._deviceHandle, _dmaHandle);
     if (status != PTK714X_STATUS_OK) {
-        std::cerr << __FILE__ << ":" << __FUNCTION__ <<
-                ": DMA channel close failed" << std::endl;
+      ELOG << __FILE__ << ":" << __FUNCTION__ <<
+        ": DMA channel close failed";
     }
 
     _adcActive = false;
 
-    std::cout << "DMA terminated for ADC channel " << _chanId << std::endl;
+    DLOG << "DMA terminated for ADC channel " << _chanId;
 
 }
 

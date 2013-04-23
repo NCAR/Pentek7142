@@ -8,7 +8,7 @@
 #include <csignal>
 
 #include <logx/Logging.h>
-LOGGING("Pentek");
+LOGGING("p7142");
 
 using namespace Pentek;
 
@@ -198,16 +198,16 @@ p7142::_initReadyFlow() {
     DWORD dwStatus = PTK714X_LibInit();
     if (dwStatus != PTK714X_STATUS_OK)
     {
-        std::cerr << "Failed to initialize the PTK714X library" << std::endl;
-        return false;
+      ELOG << "Failed to initialize the PTK714X library";
+      return false;
     }
 
     /* Find and open the next PTK714X device */
     _deviceHandle = PTK714X_DeviceFindAndOpen(&_Next7142Slot, &_BAR0Base, &_BAR2Base);
     if (_deviceHandle == NULL)
     {
-        std::cerr << "Pentek 7142 device not found when opening card " << 
-                _NumOpenCards << std::endl;
+      ELOG << "Pentek 7142 device not found when opening card " << 
+        _NumOpenCards;
     }
 
     /* Initialize 7142 register address tables */
@@ -217,18 +217,16 @@ p7142::_initReadyFlow() {
     P7142_GET_MODULE_ID(_p7142Regs.BAR2RegAddr.idReadout, _moduleId);
     if (_moduleId != P7142_MODULE_ID)
     {
-        std::cerr << "Pentek card " << _NumOpenCards + 1 << " is not a 7142!" <<
-                std::endl;
-        std::cerr << "Expected 0x" << std::hex << P7142_MODULE_ID << 
-           ", and got 0x" << _moduleId << std::dec << std::endl;
-        return false;
+      ELOG << "Pentek card " << _NumOpenCards + 1 << " is not a 7142!";
+      ELOG << "Expected 0x" << std::hex << P7142_MODULE_ID << 
+        ", and got 0x" << _moduleId << std::dec;
+      return false;
     }
 
-    std::cout << "Pentek 7142 device";
-    std::cout << std::hex << " BAR0: 0x" << (void *)_BAR0Base;
-    std::cout << std::hex << " BAR2: 0x" << (void *)_BAR2Base;
-    std::cout << std::dec;
-    std::cout <<std::endl;
+    DLOG << "Pentek 7142 device";
+    DLOG << std::hex << " BAR0: 0x" << (void *)_BAR0Base;
+    DLOG << std::hex << " BAR2: 0x" << (void *)_BAR2Base;
+    DLOG << std::dec;
 
     /// @todo Although we follow the normal ReadyFlow protocol
     /// for configuring the DAC (P7142SetDac5687Defaults()
@@ -383,7 +381,7 @@ p7142::enableGateGen() {
     /// @todo It doesn't seem to make any difference whether the gate is on
     /// or off. Need to track this down.
     P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_ENABLE);
-    std::cout << "GateGen enabled" << std::endl;
+    DLOG << "GateGen enabled";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -429,7 +427,7 @@ p7142::_resetDCM() {
     P7142_SET_DCM_CTRL_DCM_RST(_p7142Regs.BAR2RegAddr.dcmControl, P7142_DCM_CTRL_DCM_RST_RUN);
     usleep(1000);
 
-    std::cout << "DCM has been cycled." << std::endl;
+    DLOG << "DCM has been cycled.";
 
     return;
 
@@ -1002,14 +1000,15 @@ uint32_t p7142::nextSimPulseNum(int chan) {
 	boost::unique_lock<boost::mutex> lock(_simPulseNumMutex);
     _waitingDownconverters++;
     if (_waitingDownconverters < (_downconverters.size())) {
-    	//std::cout << "chan " << chan << " waiting for pulse number" << std::endl;
+    	//DLOG << "chan " << chan << " waiting for pulse number";
     	_simPulseNumCondition.wait(lock);
     } else {
     	simWait();
     	_waitingDownconverters = 0;
     	_simPulseNumCondition.notify_all();
     }
-    //std::cout << "chan " << chan << " gets pulse number " << _downconverters[chan]._pulseNum + 1 << std::endl;
+    // DLOG << "chan " << chan << " gets pulse number "
+    //      << _downconverters[chan]._pulseNum + 1;
     return(_downconverters[chan]._pulseNum++);
 
 }

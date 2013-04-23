@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include <logx/Logging.h>
-LOGGING("Pentek");
+LOGGING("p7142sd3c");
 
 namespace Pentek {
     

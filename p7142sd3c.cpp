@@ -169,6 +169,14 @@ p7142sd3c::addDownconverter(int chanId, uint32_t dmaDescSize,
         bool internalClock) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
+    uint32_t maxDmaSize = 1024 * 1024 * 4;
+    if (dmaDescSize > maxDmaSize) {
+      ELOG << "ERROR in addDownconverter";
+      ELOG << "  Requested DMA buffer size too large: " << dmaDescSize;
+      ELOG << "  Max allowable size 4 MBytes: " << maxDmaSize;
+      abort();
+    }
+
     // Create a new p7142sd3cDn downconverter and put it in our list
     p7142sd3cDn* downconverter = new p7142sd3cDn(
     		this,

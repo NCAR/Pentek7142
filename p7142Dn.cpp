@@ -227,8 +227,7 @@ p7142Dn::_initDma() {
             ELOG << __PRETTY_FUNCTION__ << 
             ": Unable to allocate a DMA buffer for channel " << _chanId << 
             "/descriptor " << d;
-            // Exit via INT signal, in hopes that cleanup will occur
-            raise(SIGINT);
+            abort();
         }
     }
 

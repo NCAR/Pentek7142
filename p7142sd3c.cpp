@@ -20,8 +20,12 @@ const unsigned int p7142sd3c::SD3C_TIMER_BITS[N_SD3C_TIMERS] = {
 };
 const unsigned int p7142sd3c::ALL_SD3C_TIMER_BITS = 0xff0;
 
+// 1970-01-01 00:00:00 UTC
 
-////////////////////////////////////////////////////////////////////////////////////////
+const ptime p7142sd3c::Epoch1970(boost::gregorian::date(1970, 1, 1), 
+                                 time_duration(0, 0, 0));
+
+///////////////////////////////////////////////////////////////////////////////////////
 p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
@@ -30,6 +34,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         p7142(simulate, simPauseMS, useFirstCard),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
+        _prt(prt),
+        _prt2(prt2),
         _gates(gates),
         _nsum(nsum),
         _simulateDDCType(simulateDDCType),
@@ -101,10 +107,10 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
     // which is in units of (ADC clock counts / 2)
-    _prtCounts = timeToCounts(prt);
-    _prt2Counts = timeToCounts(prt2);
-    _prf = 1.0 / prt;   // Hz
-    _prf2 = 1.0 / prt2; // Hz
+    _prtCounts = timeToCounts(_prt);
+    _prt2Counts = timeToCounts(_prt2);
+    _prf = 1.0 / _prt;   // Hz
+    _prf2 = 1.0 / _prt2; // Hz
 
     // Sync pulse timer. Note that the width of this timer must be at least
     // 140 ns to be recognized to be counted by the Acromag PMC730 Multi-IO
@@ -125,8 +131,10 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  simulate: " << simulate;
     DLOG << "  tx_delay: " << tx_delay;
     DLOG << "  tx_pulsewidth: " << tx_pulsewidth;
-    DLOG << "  prt: " << prt;
-    DLOG << "  prt2: " << prt2;
+    DLOG << "  prt: " << _prt;
+    DLOG << "  prt2: " << _prt2;
+    DLOG << "  prf: " << _prf << " Hz";
+    DLOG << "  prf2: " << _prf2 << " Hz";
     DLOG << "  staggeredPrt: " << staggeredPrt;
     DLOG << "  gates: " << gates;
     DLOG << "  nsum: " << nsum;
@@ -136,14 +144,15 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  simPauseMS: " << simPauseMS;
     DLOG << "  useFirstCard: " << useFirstCard;
 
-    DLOG << "  tx delay:      " << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts" ;
-    DLOG << "  tx pulse width:" << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts";
-    DLOG << "  prtCounts:     " << _prtCounts       << " adc_clock/2 counts";
-    DLOG << "  prt2Counts:    " << _prt2Counts      << " adc_clock/2 counts";
-    DLOG << "  staggered:     " << ((_staggeredPrt) ? "true" : "false");
-    DLOG << "  adc clock:     " << _adc_clock << " Hz";
-    DLOG << "  prf:           " << _prf << " Hz";
-    DLOG << "  data rate:     " << dataRate()/1.0e3 << " KB/s";
+    DLOG << "  tx delay: "
+         << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts" ;
+    DLOG << "  tx pulse width: " 
+         << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts";
+    DLOG << "  prtCounts: " << _prtCounts << " adc_clock/2 counts";
+    DLOG << "  prt2Counts: " << _prt2Counts << " adc_clock/2 counts";
+    DLOG << "  staggered: " << ((_staggeredPrt) ? "true" : "false");
+    DLOG << "  adc clock: " << _adc_clock << " Hz";
+    DLOG << "  data rate: " << dataRate()/1.0e3 << " KB/s";
 
     DLOG << "=============================";
 
@@ -616,34 +625,33 @@ int64_t p7142sd3c::pulseAtTime(ptime time) const {
     int64_t pulseNum = 0;
     if (_staggeredPrt) {
         // First count the complete pairs of PRT1 and PRT2
-        double prt1 = 1.0 / _prf;
-        double prt2 = 1.0 / _prf2;
-        double pairTime = prt1 + prt2;
+        double pairTime = _prt + _prt2;
         pulseNum = 2 * int64_t(timeSinceStart / pairTime);
         // Then work with the remaining time that's a fraction of (PRT1 + PRT2)
         double remainingTime = fmod(timeSinceStart, pairTime);
         double absRemainingTime = fabs(remainingTime);
         int sign = (remainingTime < 0) ? -1 : 1;
         
-        if (absRemainingTime > (prt1 + 0.5 * prt2)) {
+        if (absRemainingTime > (_prt + 0.5 * _prt2)) {
             pulseNum += sign * 2;
-        } else if (absRemainingTime > (0.5 * prt1)) {
+        } else if (absRemainingTime > (0.5 * _prt)) {
             // If the remainder is greater than halfway between 0 and PRT1,
             // add 1 to the pulse count
             pulseNum += sign;
         }
     } else {
-        double prt1 = 1.0 / _prf;
-        pulseNum = int64_t(timeSinceStart / prt1);
-        double remainingTime = fmod(timeSinceStart, prt1);
+        pulseNum = int64_t(timeSinceStart / _prt);
+        double remainingTime = fmod(timeSinceStart, _prt);
         int sign = (remainingTime < 0) ? -1 : 1;
         // If the remainder is more than 1/2 a PRT, add another pulse
-        if (fabs(remainingTime) > (0.5 * prt1)) {
+        if (fabs(remainingTime) > (0.5 * _prt)) {
             pulseNum += sign;
         }
     }
     
-    return(pulseNum);
+    /// pulse numbers are 1-based
+    /// so add 1 to the computed number
+    return(pulseNum + 1);
 }
 
 //////////////////////////////////////////////////////////////////////

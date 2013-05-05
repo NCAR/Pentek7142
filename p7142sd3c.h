@@ -282,40 +282,112 @@ public:
     /// in bytes per second
     int dataRate();
 
+    ////////////////////////////////////////////////////////////////////////
     /// @brief Return the time of the given transmit pulse.
     /// @return Time of the given transmit pulse.
-    /// This method is inlined because it gets called a lot, and removing the call 
-    /// overhead helps things noticeably.
-    inline boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart) const {
+    /// This method is inlined because it gets called a lot,
+    /// and removing the call overhead helps things noticeably.
+
+    inline boost::posix_time::ptime
+      timeOfPulse(int64_t nPulsesSinceStart) const {
+
         // Figure out offset since transmitter start based on the pulse
         // number and PRT(s).
+        //
+        // NOTE: nPulsesSinceStart is 1-based
+
         double offsetSeconds;
+        int64_t count = nPulsesSinceStart - 1;
         if (_staggeredPrt) {
-            unsigned long prt1Count = nPulsesSinceStart / 2 + nPulsesSinceStart % 2;
-            unsigned long prt2Count = nPulsesSinceStart / 2;
-            offsetSeconds =  prt1Count / _prf + prt2Count / _prf2;
+          unsigned long prt2Count = count / 2;
+          unsigned long prt1Count = prt2Count + count % 2;
+          offsetSeconds = (prt1Count * _prt) + (prt2Count * _prt2);
         } else {
-            offsetSeconds = nPulsesSinceStart / _prf;
+          offsetSeconds = count * _prt;
         }
 
         // Convert subseconds to boost::posix_time::time_duration "ticks"
         double subseconds = fmod(offsetSeconds, 1.0);
         int fractionalSeconds = 
-            (int)(subseconds * boost::posix_time::time_duration::ticks_per_second());
+            (int)(subseconds * 
+                  boost::posix_time::time_duration::ticks_per_second());
 
-        // Now construct a boost::posix_time::time_duration from the seconds and
-        // fractional seconds
-        boost::posix_time::time_duration offset(0, 0, long(offsetSeconds), fractionalSeconds);
+        // Now construct a boost::posix_time::time_duration from the
+        // seconds and fractional seconds
+        boost::posix_time::time_duration
+          offset(0, 0, long(offsetSeconds), fractionalSeconds);
 
         // Finally, add the offset to the _xmitStartTime to get the absolute
         // pulse time
+
         return(_xmitStartTime + offset);
+
+    }
+    
+    ////////////////////////////////////////////////////////////////////////
+    /// @brief Return the time of the given transmit pulse.
+    /// @return Time of the given transmit pulse.
+    /// Also sets the time in seconds and nano seconds
+
+    inline boost::posix_time::ptime timeOfPulse(int64_t nPulsesSinceStart,
+                                                int64_t &secondsSinceEpoch,
+                                                int64_t &secondsSinceStart,
+                                                int64_t &nanoSeconds) const
+    {
+
+      // Figure out offset since transmitter start based on the pulse
+      // number and PRT(s).
+      //
+      // NOTE: nPulsesSinceStart is 1-based
+      
+      double offsetSeconds;
+      int64_t count = nPulsesSinceStart - 1;
+      if (_staggeredPrt) {
+        unsigned long prt2Count = count / 2;
+        unsigned long prt1Count = prt2Count + count % 2;
+        offsetSeconds = (prt1Count * _prt) + (prt2Count * _prt2);
+      } else {
+        offsetSeconds = count * _prt;
+      }
+      
+      // Compute seconds and nanoseconds
+
+      secondsSinceStart = (int64_t) offsetSeconds;
+      double subseconds = fmod(offsetSeconds, 1.0);
+      nanoSeconds = (int64_t) (subseconds * 1.0e9 + 0.5);
+
+      int fractionalSeconds = 
+        (int)(subseconds *
+              boost::posix_time::time_duration::ticks_per_second());
+      
+      // Now construct a boost::posix_time::time_duration from the
+      // seconds and fractional seconds
+
+      boost::posix_time::time_duration
+        offset(0, 0, long(offsetSeconds), fractionalSeconds);
+      
+      // Finally, add the offset to the _xmitStartTime to get the absolute
+      // pulse time
+
+      boost::posix_time::ptime pulseTime =
+        _xmitStartTime + offset;
+      boost::posix_time::time_duration
+        timeFromEpoch = pulseTime - Epoch1970;
+      secondsSinceEpoch = timeFromEpoch.total_seconds();
+
+      return pulseTime;
+
     }
     
     /// @brief Return the closest pulse number to a given time.
     /// @return The closest pulse number to a given time.
+
     int64_t pulseAtTime(boost::posix_time::ptime time) const;
     
+    /// Epoch - 1970-01-01 00:00:00 UTC
+
+    static const boost::posix_time::ptime Epoch1970;
+
     friend class p7142sd3cDn;
     
 protected:
@@ -472,6 +544,10 @@ protected:
     boost::posix_time::ptime _xmitStartTime;
     /// The adc clock rate in Hz
     double _adc_clock;
+    /// The prt in seconds
+    double _prt;
+    /// The dual prt in seconds
+    double _prt2;
     /// The prf(s) in Hz
     double _prf;
     /// The dual prf in Hz.

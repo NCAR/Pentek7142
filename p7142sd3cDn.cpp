@@ -338,10 +338,12 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     }
 
     if (!kaiserFailed) {
-        DLOG << kaiser.size()
-                << " Kaiser filter coefficients successfully loaded";
+      DLOG << kaiser.size()
+           << " Kaiser filter coefficients successfully loaded: "
+           << kaiser.name();
     } else {
-        DLOG << "Unable to load the Kaiser filter coefficients";
+      DLOG << "Unable to load the Kaiser filter coefficients";
+      kaiser.dump(std::cerr);
     }
 
     // program the gaussian coefficients
@@ -439,10 +441,12 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     }
 
     if (!gaussianFailed) {
-        DLOG << gaussian.size()
-                << " Gaussian filter coefficients successfully loaded";
+      DLOG << gaussian.size()
+           << " Gaussian filter coefficients successfully loaded: "
+           << gaussian.name();
     } else {
-        DLOG << "Unable to load the Gaussian filter coefficients";
+      DLOG << "Unable to load the Gaussian filter coefficients";
+      gaussian.dump(std::cerr);
     }
 
     // return to decimal output
@@ -554,7 +558,6 @@ int p7142sd3cDn::filterSetup() {
     // get the kaiser filter coefficients
     std::string kaiserFilterName;
     FilterSpec kaiser;
-    double kaiserBandwidth = 5.0;
     if (_kaiserFile.size() != 0) {
         FilterSpec k(_kaiserFile);
         if (!k.ok()) {
@@ -594,9 +597,6 @@ int p7142sd3cDn::filterSetup() {
         kaiser = FilterSpec(builtins[kaiserFilterName]);
         DLOG << "Using kaiser filter coefficient set " << kaiserFilterName;
     }
-
-    DLOG << "Kaiser filter will be programmed for " << kaiserBandwidth
-         << " MHz bandwidth";
 
     // load the filter coefficients
 

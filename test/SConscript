@@ -2,7 +2,6 @@
 
 tools = Split("""
 pentek
-rapradar
 qtt_qtconfig
 boost_date_time
 boost_program_options

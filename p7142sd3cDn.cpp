@@ -60,6 +60,7 @@ p7142sd3cDn::p7142sd3cDn(
 
     DLOG << "+++++++++++++++++++++++++++++";
     DLOG << "p7142sd3cDn constructor";
+    DLOG << "  cardIndex: " << _p7142.getCardIndex();
     DLOG << "  chanId: " << chanId;
     DLOG << "  isBurst: " << isBurst;
     DLOG << "  tsLength: " << tsLength;
@@ -147,10 +148,10 @@ p7142sd3cDn::p7142sd3cDn(
     // Warn if data latency is greater than 1 second, and bail completely if
     // it's greater than 5 seconds.
     if (_dataInterruptPeriod > 1.0) {
-        std::cerr << "interruptBytes " << interruptBytes << std::endl;
-        std::cerr << "chanDataRate " << chanDataRate << std::endl;
-        std::cerr << "Warning: Estimated max data latency for channel " << 
-        _chanId << " is " << _dataInterruptPeriod << " s!" << std::endl;
+        ELOG << "interruptBytes " << interruptBytes;
+        ELOG << "chanDataRate " << chanDataRate;
+        ELOG << "Warning: Estimated max data latency for channel " << 
+        _chanId << " is " << _dataInterruptPeriod << " s!";
     }
 
     if (_dataInterruptPeriod > 5.0) {
@@ -167,8 +168,7 @@ p7142sd3cDn::p7142sd3cDn(
     int bypassOk = _isBurst ?
             setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
     if (!bypassOk) {
-        std::cerr << "Failed to set decimation for channel " << _chanId <<
-                std::endl;
+        ELOG << "Failed to set decimation for channel " << _chanId;
         abort();
     }
     DLOG << "bypass decim: " << bypassDivider();
@@ -343,7 +343,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
            << kaiser.name();
     } else {
       DLOG << "Unable to load the Kaiser filter coefficients";
-      kaiser.dump(std::cerr);
+      DLOG << kaiser.toStr();
     }
 
     // program the gaussian coefficients
@@ -446,7 +446,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
            << gaussian.name();
     } else {
       DLOG << "Unable to load the Gaussian filter coefficients";
-      gaussian.dump(std::cerr);
+      DLOG << gaussian.toStr();
     }
 
     // return to decimal output
@@ -469,8 +469,8 @@ int p7142sd3cDn::filterSetup() {
     if (_gaussianFile.size() != 0) {
         FilterSpec g(_gaussianFile);
         if (!g.ok()) {
-            std::cerr << "Incorrect or unaccessible filter definition: "
-                    << _gaussianFile << std::endl;
+            ELOG << "Incorrect or unaccessible filter definition: "
+                    << _gaussianFile;
             return -1;
         } else {
             gaussian = g;
@@ -517,7 +517,7 @@ int p7142sd3cDn::filterSetup() {
                 gaussianFilterName = "ddc8_1_0";
                 break;
             default:
-                std::cerr << "chip width specification of "
+                ELOG << "chip width specification of "
                           << _sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)
                           << " is not recognized, filter will be configured for a "
                           << pulsewidthUs << " uS pulse\n";
@@ -537,17 +537,16 @@ int p7142sd3cDn::filterSetup() {
             break;
         }
         default: {
-            std::cerr << "DDC type " << ddcTypeName() << 
-                " not handled in " << __FUNCTION__ << std::endl;
+            ELOG << "DDC type " << ddcTypeName() << 
+                " not handled in " << __FUNCTION__;
             abort();
         }
         }
 
         if (builtins.find(gaussianFilterName) == builtins.end()) {
-            std::cerr << "No entry for " << gaussianFilterName << ", "
+            ELOG << "No entry for " << gaussianFilterName << ", "
                     << pulsewidthUs
-                    << " us pulsewidth in the list of builtin Gaussian filters!"
-                    << std::endl;
+                 << " us pulsewidth in the list of builtin Gaussian filters!";
             abort();
         }
         gaussian = FilterSpec(builtins[gaussianFilterName]);
@@ -561,8 +560,8 @@ int p7142sd3cDn::filterSetup() {
     if (_kaiserFile.size() != 0) {
         FilterSpec k(_kaiserFile);
         if (!k.ok()) {
-            std::cerr << "Incorrect or unaccessible filter definition: "
-                    << _kaiserFile << std::endl;
+            ELOG << "Incorrect or unaccessible filter definition: "
+                    << _kaiserFile;
             return -1;
         } else {
             kaiser = k;
@@ -584,14 +583,14 @@ int p7142sd3cDn::filterSetup() {
             break;
         }
         default: {
-            std::cerr << "DDC type " << ddcTypeName() << 
-                " not handled in " << __FUNCTION__ << std::endl;
+            ELOG << "DDC type " << ddcTypeName() << 
+                " not handled in " << __FUNCTION__;
             abort();
         }
         }
         if (builtins.find(kaiserFilterName) == builtins.end()) {
-            std::cerr << "No entry for " << kaiserFilterName
-                    << " in the list of builtin Kaiser filters!" << std::endl;
+            ELOG << "No entry for " << kaiserFilterName
+                    << " in the list of builtin Kaiser filters!";
             abort();
         }
         kaiser = FilterSpec(builtins[kaiserFilterName]);
@@ -601,11 +600,10 @@ int p7142sd3cDn::filterSetup() {
     // load the filter coefficients
 
     if (!loadFilters(gaussian, kaiser)) {
-        std::cerr << "Unable to load filters\n";
+        ELOG << "Unable to load filters\n";
         if (! usingInternalClock()) {
-            std::cerr << "Is the external clock source connected?" << std::endl;
-            std::cerr << "Is the clock signal strength at least +3 dBm?" << 
-                std::endl;
+            ELOG << "Is the external clock source connected?";
+            ELOG << "Is the clock signal strength at least +3 dBm?";
         }
         exit(1);
     }
@@ -690,8 +688,8 @@ p7142sd3cDn::getBeam(int64_t& nPulsesSinceStart) {
         case p7142sd3c::MODE_CI:
             return ciBeamDecoded(nPulsesSinceStart);
         default:
-            std::cerr << __PRETTY_FUNCTION__ << ": unhandled mode " << 
-                _sd3c._operatingMode() << std::endl;
+            ELOG << __PRETTY_FUNCTION__ << ": unhandled mode " << 
+                _sd3c._operatingMode();
             abort();
     }
 }
@@ -723,7 +721,7 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
             std::hex << std::setw(8) << pulseTag << " after pulse tag 0x" <<
             std::setw(8) << (uint32_t(_chanId) << 30 | _lastPulse) << 
             std::dec << ". Pulse number will just be incremented.\n";
-        std::cerr << msgStream.str();
+        ELOG << msgStream.str();
 
         // Just hijack the next pulse number, since we've got garbage for
         // the pulse anyway...
@@ -749,17 +747,17 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
     }
 
     if (delta == 0) {
-        std::cerr << "Channel " << _chanId << ": got repeat of pulse " <<
-                pulseNum << "!" << std::endl;
+        ELOG << "Channel " << _chanId << ": got repeat of pulse " <<
+                pulseNum << "!";
         abort();
     } else if (delta != 1) {
-        std::cerr << _lastPulse << "->" << pulseNum << ": ";
+        ELOG << _lastPulse << "->" << pulseNum << ": ";
         if (delta < 0) {
-            std::cerr << "Channel " << _chanId << " went BACKWARD " <<
-                -delta << " pulses" << std::endl;
+            ELOG << "Channel " << _chanId << " went BACKWARD " <<
+                -delta << " pulses";
         } else {
-            std::cerr << "Channel " << _chanId << " dropped " <<
-                delta - 1 << " pulses" << std::endl;
+            ELOG << "Channel " << _chanId << " dropped " <<
+                delta - 1 << " pulses";
         }
     }
 
@@ -835,7 +833,8 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
         uint32_t nHuntWords = 0;
         uint32_t consecutiveData = 0;
         
-        syncHuntMsg << "Sync hunt words on chan " << _chanId << ": ";
+        syncHuntMsg << "Sync hunt words on card: " << _p7142.getCardIndex()
+                    << ", chan: " << _chanId << " : ";
         syncHuntMsg << std::setfill('0');
 
         while (true) {
@@ -850,7 +849,7 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
             }
             nHuntWords++;
 
-			// Break out when we've found a sync word
+            // Break out when we've found a sync word
             if (word == SD3C_SYNCWORD) {
                 // Keep any remaining bytes after the sync word in tmpBuf,
                 // moving them to the beginning of tmpBuf.
@@ -872,7 +871,9 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
             //
             // Otherwise, print the word as being interesting (likely a pulse 
             // tag).
-            int16_t * shortp = reinterpret_cast<int16_t *>(&word);
+            int16_t shortp[2];
+            memcpy(shortp, &word, sizeof(word));
+            // int16_t * shortp = reinterpret_cast<int16_t *>(&word);
             if ((shortp[0] > -32 && shortp[0] < 32) && 
                 (shortp[1] > -32 && shortp[1] < 32)) {
                 consecutiveData++;
@@ -892,17 +893,19 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
             syncHuntMsg << "<DATA>x" << consecutiveData;
         }
         syncHuntMsg << "<SYNC>";
-        std::cerr << syncHuntMsg.str() << std::endl;
+        ELOG << syncHuntMsg.str();
     }
 
     if (_syncErrors != startSyncErrors) {
         uint32_t * wordp = reinterpret_cast<uint32_t *>(pulseTag);
-        std::cerr << std::setfill('0');
-        std::cerr << "XX " << _syncErrors - startSyncErrors << 
-            " sync errors on channel " << chanId() << 
-            " finding pulse w/tag 0x" << std::setw(8) << std::hex << *wordp << 
-            " after tag 0x" << std::setw(8) << 
-            (uint32_t(_chanId) << 30 | _lastPulse) << std::dec << std::endl;
+        ELOG << std::setfill('0');
+        ELOG << "XX Got " << _syncErrors - startSyncErrors
+             << " sync errors, cardIndex: " << _p7142.getCardIndex()
+             << ", channel " << chanId();
+        ELOG << " finding pulse w/tag 0x"
+             << std::setw(8) << std::hex << *wordp
+             << " after tag 0x" << std::setw(8)
+             << (uint32_t(_chanId) << 30 | _lastPulse) << std::dec;
     }
     return _buf;
 }
@@ -938,17 +941,17 @@ p7142sd3cDn::ciBeamDecoded(int64_t& nPulsesSinceStart) {
     }
 
     if (delta == 0) {
-        std::cerr << "Channel " << _chanId << ": got repeat of pulse " <<
-                pulseNum << "!" << std::endl;
+        ELOG << "Channel " << _chanId << ": got repeat of pulse " <<
+                pulseNum << "!";
         abort();
     } else if (delta != 1) {
-        //std::cerr << _lastPulse << "->" << pulseNum << ": ";
+        //ELOG << _lastPulse << "->" << pulseNum << ": ";
         if (delta < 0) {
-            //std::cerr << "Channel " << _chanId << " went BACKWARD " <<
-            //    -delta << " pulses" << std::endl;
+            //ELOG << "Channel " << _chanId << " went BACKWARD " <<
+            //    -delta << " pulses";
         } else {
-            //std::cerr << "Channel " << _chanId << " dropped " <<
-            //    delta - 1 << " pulses" << std::endl;
+            //ELOG << "Channel " << _chanId << " dropped " <<
+            //    delta - 1 << " pulses";
         }
     }
 
@@ -1139,8 +1142,8 @@ p7142sd3cDn::initBuffer() {
         _beamLength = _gates * 2 * 2 * 4;
         break;
     default:
-        std::cerr << __PRETTY_FUNCTION__ << ": unknown SD3C mode: " << 
-            _sd3c._operatingMode() << std::endl;
+        ELOG << __PRETTY_FUNCTION__ << ": unknown SD3C mode: " << 
+            _sd3c._operatingMode();
         abort();
     }
 

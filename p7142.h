@@ -229,6 +229,9 @@ namespace Pentek {
             /// @return the P7142 circuit board temperature, deg C
             int circuitBoardTemp() const;
 
+            /// get the index of the card in use
+            int getCardIndex() const { return _cardIndex; }
+
             // We make our associated downconverter and upconverter classes 
             // friends so that they have access to BAR registers, etc.
             // methods, etc.

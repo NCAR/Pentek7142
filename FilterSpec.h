@@ -39,9 +39,12 @@ public:
 	/// @return true if symmetric
 	bool isSymmetric();
 
-	/// list the filter characteristics to cout.
+	/// print the filter characteristics
         void dump(std::ostream &out);
-	void dump();
+        void dump(); // to stdout
+
+        /// convert to string representation
+        std::string toStr();
 
 protected:
 	bool _ok; ///< true if the filter was specified correctly

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cerrno>
 #include <cstring>
+#include <sstream>
 #include <logx/Logging.h>
 LOGGING("FilterSpec");
 
@@ -147,19 +148,28 @@ FilterSpec::isSymmetric() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+std::string 
+  FilterSpec::toStr() 
+{
+
+  std::ostringstream sstr;
+  sstr << "=========== filter details ============" << std::endl;
+  sstr << " filePath: " << _filePath << std::endl;
+  sstr << " filterName: " << _filterName << std::endl;
+  sstr << " isSymmetric: " << (_isSymmetric?"Y":"N") << std::endl;
+  for (unsigned int ii = 0; ii < this->size(); ii++) {
+    sstr << "   index, val: " 
+         << ii << ", " << (*this)[ii] << std::endl;
+  }
+  return sstr.str();
+  
+}
+
+///////////////////////////////////////////////////////////////////////////////
 void
   FilterSpec::dump(std::ostream &out) 
 {
-
-  out << "=========== filter details ============" << std::endl;
-  out << " filePath: " << _filePath << std::endl;
-  out << " filterName: " << _filterName << std::endl;
-  out << " isSymmetric: " << (_isSymmetric?"Y":"N") << std::endl;
-  for (unsigned int ii = 0; ii < this->size(); ii++) {
-    out << "   index, val: " 
-        << ii << ", " << (*this)[ii] << std::endl;
-  }
-
+  out << toStr();
 }
 
 void
@@ -167,3 +177,4 @@ void
 {
   dump(std::cout);
 }
+

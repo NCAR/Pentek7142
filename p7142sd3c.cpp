@@ -143,6 +143,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  externalStartTrigger: " << externalStartTrigger;
     DLOG << "  simPauseMS: " << simPauseMS;
     DLOG << "  useFirstCard: " << useFirstCard;
+    DLOG << "  cardIndex: " << _cardIndex;
 
     DLOG << "  tx delay: "
          << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts" ;

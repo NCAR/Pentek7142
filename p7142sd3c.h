@@ -122,6 +122,9 @@ public:
             int simWaveLength = 5000,
             bool internalClock = false);
     
+    /// @return The sd3c firmware revision number.
+    int sd3cRev() const { return(_sd3cRev); }
+
     /// @brief Stop the DMA for a specified downconverter
     /// @param chan The desired channel
     void stopDMA(int chan);
@@ -483,9 +486,6 @@ protected:
     /// If _freerun is true, set the FREERUN bit in the
     /// transceiver control register. Otherwise clear it.
     void loadFreeRun();
-
-    /// @return The sd3c firmware revision number.
-    int sd3cRev() const { return(_sd3cRev); }
 
     /**
      * Simple class to hold integer delay and width for a timer.

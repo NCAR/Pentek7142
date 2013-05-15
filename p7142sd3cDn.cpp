@@ -923,7 +923,7 @@ p7142sd3cDn::ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim) {
     if (!rim) { 
     	buf = ciBeam(pulseNum);
     } else {
-    	buf = ciRimBeam(pulseNum);
+    	buf = ciBeamRim(pulseNum);
     }
 
     // Initialize _lastPulse if this is the first pulse we've seen
@@ -1015,7 +1015,7 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
 
 //////////////////////////////////////////////////////////////////////////////////
 char*
-p7142sd3cDn::ciRimBeam(unsigned int& pulseNum) {
+p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     int r;
@@ -1054,7 +1054,7 @@ p7142sd3cDn::ciRimBeam(unsigned int& pulseNum) {
         r = read(tagbuf, 64);
         assert(r == 64);
 
-        if (ciRimCheckTag(tagbuf, pulseNum)) {
+        if (ciCheckTagRim(tagbuf, pulseNum)) {
             return _buf;
         }
         _syncErrors++;
@@ -1065,7 +1065,7 @@ p7142sd3cDn::ciRimBeam(unsigned int& pulseNum) {
             r = read(tagbuf+12, 4);
             assert(r == 4);
             // check for synchronization
-            if (ciRimCheckTag(tagbuf, pulseNum)) {
+            if (ciCheckTagRim(tagbuf, pulseNum)) {
                 break;
             }
         }
@@ -1126,7 +1126,7 @@ p7142sd3cDn::ciCheckTag(char* p, unsigned int& pulseNum) {
 
 //////////////////////////////////////////////////////////////////////////////////
 bool
-p7142sd3cDn::ciRimCheckTag(char* p, unsigned int& pulseNum) {
+p7142sd3cDn::ciCheckTagRim(char* p, unsigned int& pulseNum) {
 
 	//  In range imaging mode, the tags are repeated four times (once per frequency)
 	//
@@ -1392,7 +1392,7 @@ p7142sd3cDn::makeSimData(int n) {
             ///  --! bits 23:00  Sequence number     (24 bits)
 
             uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
-            for (int freq = 0; freq < 3; freq++) {
+            for (int freq = 0; freq < 4; freq++) {
             	for (int j = 0; j < 4; j++) {
 					//uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, _simPulseNum);
 					uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, simPulseNum);

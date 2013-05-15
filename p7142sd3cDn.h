@@ -236,7 +236,7 @@ char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// @param pulseNum The pulse number is returned here
     /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
-    char* ciRimBeam(unsigned int& pulseNum);
+    char* ciBeamRim(unsigned int& pulseNum);
     /// Check that a coherent integrator tag is
     /// valid.
     /// @param p Pointer to the tag.
@@ -250,7 +250,7 @@ char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// @param pulseNum The pulse number is returned here,
     /// if the tag is valid.
     /// @returns True if valid, false otherwise.
-    static bool ciRimCheckTag(char* p, unsigned int& pulseNum);
+    static bool ciCheckTagRim(char* p, unsigned int& pulseNum);
     /// Create a coherent integrator tag. Used for simulation.
     /// @param format The format identifier. Must match the format number produced by the firmware.
     /// @param chan The channel number (0-3).

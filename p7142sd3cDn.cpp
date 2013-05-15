@@ -686,7 +686,9 @@ p7142sd3cDn::getBeam(int64_t& nPulsesSinceStart) {
         case p7142sd3c::MODE_PULSETAG:
             return ptBeamDecoded(nPulsesSinceStart);
         case p7142sd3c::MODE_CI:
-            return ciBeamDecoded(nPulsesSinceStart);
+            return ciBeamDecoded(nPulsesSinceStart, false);
+        case p7142sd3c::MODE_CI_RIM:
+            return ciBeamDecoded(nPulsesSinceStart, true);
         default:
             ELOG << __PRETTY_FUNCTION__ << ": unhandled mode " << 
                 _sd3c._operatingMode();
@@ -912,12 +914,17 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
 
 //////////////////////////////////////////////////////////////////////////////////
 char*
-p7142sd3cDn::ciBeamDecoded(int64_t& nPulsesSinceStart) {
+p7142sd3cDn::ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     // get the beam
     unsigned int pulseNum;
-    char* buf = ciBeam(pulseNum);
+    char* buf;
+    if (!rim) { 
+    	buf = ciBeam(pulseNum);
+    } else {
+    	buf = ciRimBeam(pulseNum);
+    }
 
     // Initialize _lastPulse if this is the first pulse we've seen
     if (_firstBeam) {
@@ -978,6 +985,7 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
             assert(r == 16);
             _firstRawBeam = false;
         }
+
         // read one beam into buf
         r = read(_buf, _beamLength);
         assert(r == _beamLength);
@@ -1007,6 +1015,65 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
 
 //////////////////////////////////////////////////////////////////////////////////
 char*
+p7142sd3cDn::ciRimBeam(unsigned int& pulseNum) {
+    boost::recursive_mutex::scoped_lock guard(_mutex);
+
+    int r;
+    if (0) {
+		std::cout << "beam length is " << beamLength()
+				<< " (" << beamLength()/4 << " I/Q words)" << std::endl;
+		uint32_t bigbuf[10000];
+		read((char*)bigbuf, 4*10000);
+		for (int i = 0; i < 10000; i++) {
+			if (!(i %16)) {
+				std::cout << std::endl  << std::setw(6) << std::setfill(' ') << std::dec << i << " ";
+			}
+			std::cout << std::setw(8) << std::setfill('0') << std::hex << bigbuf[i] << " ";
+		}
+    }
+
+    while(1) {
+        if (_firstRawBeam) {
+            // skip over the first 64 bytes, assuming that
+            // they are a good tag word.
+            r = read(_buf, 64);
+            assert(r == 64);
+            _firstRawBeam = false;
+        }
+        //uint32_t* h = (uint32_t*) _buf;
+        //for (int i = 0; i < 16; i++) {
+        //	std::cout << i << " " << std::hex  << h[i] << std::endl;
+        //}
+
+        // read one beam into buf
+        r = read(_buf, _beamLength);
+        assert(r == _beamLength);
+
+        // read the next tag word
+        char tagbuf[64];
+        r = read(tagbuf, 64);
+        assert(r == 64);
+
+        if (ciRimCheckTag(tagbuf, pulseNum)) {
+            return _buf;
+        }
+        _syncErrors++;
+
+        // scan 4 bytes at a time for a correct tag
+        while(1) {
+            memmove(tagbuf, tagbuf+4,12);
+            r = read(tagbuf+12, 4);
+            assert(r == 4);
+            // check for synchronization
+            if (ciRimCheckTag(tagbuf, pulseNum)) {
+                break;
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+char*
 p7142sd3cDn::frBeam() {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
@@ -1019,15 +1086,15 @@ p7142sd3cDn::frBeam() {
 bool
 p7142sd3cDn::ciCheckTag(char* p, unsigned int& pulseNum) {
 
-/// The tag order:
-///  --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
-///
-/// The CI tag:
-///  --! bits 31:28  Format number   0-15(4 bits)
-///  --! bits 27:26  Channel number  0-3 (2 bits)
-///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-///  --! bits 23:00  Sequence number     (24 bits)
+// The tag order:
+//  --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+//
+// The CI tag:
+//  --! bits 31:28  Format number   0-15(4 bits)
+//  --! bits 27:26  Channel number  0-3 (2 bits)
+//  --! bits    25  0=even, 1=odd   0-1 (1 bit)
+//  --! bit     24  0=I, 1=Q        0-1 (1 bit)
+//  --! bits 23:00  Sequence number     (24 bits)
 
     int format[4];
     int chan[4];
@@ -1053,6 +1120,59 @@ p7142sd3cDn::ciCheckTag(char* p, unsigned int& pulseNum) {
     }
     retval = retval && !Odd[0] && !Odd[1] && Odd[2] && Odd[3];
     retval = retval &&   !Q[0] &&    Q[1] &&  !Q[2] &&   Q[3];
+
+    return retval;;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+bool
+p7142sd3cDn::ciRimCheckTag(char* p, unsigned int& pulseNum) {
+
+	//  In range imaging mode, the tags are repeated four times (once per frequency)
+	//
+	// The tag order:
+	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
+	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
+	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
+	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
+	// <IQpairs,even pulse><IQpairs,odd pulse>
+	//
+	// The CI tag:
+	//  --! bits 31:28  Format number   0-15(4 bits)
+	//  --! bits 27:26  Channel number  0-3 (2 bits)
+	//  --! bits    25  0=even, 1=odd   0-1 (1 bit)
+	//  --! bit     24  0=I, 1=Q        0-1 (1 bit)
+	//  --! bits 23:00  Sequence number     (24 bits)
+
+    int format[16];
+    int chan[16];
+    bool Odd[16];
+    bool Q[16];
+    uint32_t seq[16];
+    for (int f = 0; f < 4; f++) {
+		for (int i = 0; i < 4; i++) {
+			uint32_t* tag = (uint32_t*)p;
+			int index = 4*f + i;
+			ciDecodeTag(tag[index], format[index], chan[index], Odd[index], Q[index], seq[index]);
+		}
+    }
+
+    pulseNum = seq[0];
+
+    // time to see if we received expected values
+    bool retval = true;
+
+	retval     = retval && (format[0] ==      2);
+
+	for (int f = 0; f < 4; f++) {
+		for (int i = 1; i < 4; i++) {
+			retval = retval && (format[i+4*f] ==      2);
+			retval = retval && (seq[i+4*f]    == seq[0]);
+			retval = retval && (chan[i+4*f]   == chan[0]);
+		}
+		retval = retval && !Odd[0+4*f] && !Odd[1+4*f] && Odd[2+4*f] && Odd[3+4*f];
+		retval = retval &&   !Q[0+4*f] &&    Q[1+4*f] &&  !Q[2+4*f] &&   Q[3+4*f];
+	}
 
     return retval;;
 }
@@ -1109,8 +1229,9 @@ p7142sd3cDn::ciDecodeTag(uint32_t tag, int& format, int& chan, bool& odd, bool& 
            << " seq:" << seq;
     stream.width(8);
     stream.fill('0');
-    stream << "decoded tag:" << std::hex << tag << std::dec;
-    DLOG << stream.str();
+    stream << " decoded tag:" << std::hex << tag << std::dec;
+    //DLOG << stream.str();
+    std::cout << stream.str() << std::endl;
 
     return;
 }
@@ -1140,6 +1261,14 @@ p7142sd3cDn::initBuffer() {
         //   odd  32 bit I and Q pairs,
         // for each gate.
         _beamLength = _gates * 2 * 2 * 4;
+        break;
+    case p7142sd3c::MODE_CI_RIM:
+        // RIM coherent integration mode has:
+        //   even 32 bit I and Q pairs followed by
+        //   odd  32 bit I and Q pairs,
+        // for each gate.
+    	// For 4 frequencies.
+        _beamLength = 4*(_gates * 2 * 2 * 4);
         break;
     default:
         ELOG << __PRETTY_FUNCTION__ << ": unknown SD3C mode: " << 
@@ -1228,6 +1357,50 @@ p7142sd3cDn::makeSimData(int n) {
                 for (int i = 0; i < 4; i++) {
                     _simFifo.push_back(p[i]);
                 }
+            }
+
+            // Add IQ data. Occasionally drop some data
+            bool doBadSync = ((1.0 * rand())/RAND_MAX) < 5.0e-6;
+            doBadSync = false;
+            int nPairs = _beamLength/8;
+            if (doBadSync) {
+                nPairs = (int)(((1.0 * rand())/RAND_MAX) * nPairs);
+            }
+            for (int i = 0; i < nPairs; i++) {
+                char iq[8];
+                r = p7142Dn::_simulatedRead(iq, 8);
+                assert(r == 8);
+                for (int j = 0; j < 8; j++) {
+                    _simFifo.push_back(iq[j]);
+                }
+            }
+
+            break;
+        }
+        case p7142sd3c::MODE_CI_RIM: {
+            /// Add the coherent integration (RIM) tag for this sample:
+
+            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            ///
+            ///  --! bits 31:28  Format number   0-15(4 bits) (==2)
+            ///  --! bits 27:26  Channel number  0-3 (2 bits)
+            ///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
+            ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
+            ///  --! bits 23:00  Sequence number     (24 bits)
+
+            uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
+            for (int freq = 0; freq < 3; freq++) {
+            	for (int j = 0; j < 4; j++) {
+					//uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, _simPulseNum);
+					uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, simPulseNum);
+					char* p = (char*)&tag;
+					for (int i = 0; i < 4; i++) {
+						_simFifo.push_back(p[i]);
+					}
+            	}
             }
 
             // Add IQ data. Occasionally drop some data

@@ -210,8 +210,9 @@ protected:
     /// The caller can access beamLength() bytes.
     /// @param nPulsesSinceStart: the number of pulses since the
     ///   xmitter was started up - allows computation of the time
+    /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
-  char* ciBeamDecoded(int64_t& nPulsesSinceStart);
+char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// Return the next beam of free run data. This
     /// is a misnomer, since there aren't really beams in free run mode.
     /// Think of them as blocks. The caller can access beamLength() bytes.
@@ -222,12 +223,20 @@ protected:
     /// @param pulseTag The pulse tag is returned here
     /// @returns Pointer to the start of the beam.
     char* ptBeam(char* pulseTag);
-    /// Return the next synchronized beam of pulse tagger data.
+    /// Return the next synchronized beam of coherent integrator data.
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
     /// @param pulseNum The pulse number is returned here
+    /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
     char* ciBeam(unsigned int& pulseNum);
+    /// Return the next synchronized beam of RIM coherent integrator data.
+    /// Data associated with synchronization errors will be skipped.
+    /// The caller can access beamLength() bytes.
+    /// @param pulseNum The pulse number is returned here
+    /// @param rim Set true if we are operating in range imaging mode.
+    /// @returns Pointer to the start of the beam.
+    char* ciRimBeam(unsigned int& pulseNum);
     /// Check that a coherent integrator tag is
     /// valid.
     /// @param p Pointer to the tag.
@@ -235,6 +244,13 @@ protected:
     /// if the tag is valid.
     /// @returns True if valid, false otherwise.
     static bool ciCheckTag(char* p, unsigned int& pulseNum);
+    /// Check that a RIM coherent integrator tag is
+    /// valid.
+    /// @param p Pointer to the tag.
+    /// @param pulseNum The pulse number is returned here,
+    /// if the tag is valid.
+    /// @returns True if valid, false otherwise.
+    static bool ciRimCheckTag(char* p, unsigned int& pulseNum);
     /// Create a coherent integrator tag. Used for simulation.
     /// @param format The format identifier. Must match the format number produced by the firmware.
     /// @param chan The channel number (0-3).

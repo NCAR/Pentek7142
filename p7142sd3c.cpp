@@ -30,7 +30,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS,
-    bool useFirstCard) :
+    bool useFirstCard,
+    bool rim) :
         p7142(simulate, simPauseMS, useFirstCard),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
@@ -39,7 +40,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         _gates(gates),
         _nsum(nsum),
         _simulateDDCType(simulateDDCType),
-        _externalStartTrigger(externalStartTrigger) {
+        _externalStartTrigger(externalStartTrigger),
+        _rim(rim){
 
 	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
@@ -82,8 +84,16 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
                 "Was the correct firmware loaded?" << std::endl;
     }
 
-    // Determine our operating mode
+    // Determine our operating mode. Use a heuristic here,
+    // since the factors determining the mode are not mutually
+    // exclusive.
+    /// @todo refactor so that the mode is simply set in the constructor.
     _mode = (_nsum > 1) ? MODE_CI : MODE_PULSETAG;
+
+    if (_rim) {
+    	_mode = MODE_CI_RIM;
+    }
+
     if (_freeRun) {
         _mode = MODE_FREERUN;
     }
@@ -608,6 +618,16 @@ int p7142sd3c::dataRate() {
         // non-CI mode because they are sums of 16 bit numbers), so there are 8 bytes
         // per gate for even and 8 bytes per gate for odd pulses.
         rate = (int)((_prf/2)*(16+_gates*8*2)/_nsum);
+        break;
+    case MODE_CI_RIM:
+        // coherent integration with range imaging
+        // there is a 48 byte tag at the beginning of each pulse. Each pulse
+        // returns a set of even I's and Q's, and a set of odd I's and Q's. The
+        // even and odd pulses are separated by the prt, and so taken together they
+        // run at half the prf. Each I and Q for a gate is 32 bits (wider than the
+        // non-CI mode because they are sums of 16 bit numbers), so there are 8 bytes
+        // per gate for even and 8 bytes per gate for odd pulses.
+        rate = (int)((_prf/2)*(48+_gates*8*2)/_nsum);
         break;
     }
 

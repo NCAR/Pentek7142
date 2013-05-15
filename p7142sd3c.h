@@ -82,7 +82,8 @@ public:
     		DDCDECIMATETYPE simulateDDCType,
     		bool externalStartTrigger = false,
     		double simPauseMS = 50,
-    		bool useFirstCard = false
+    		bool useFirstCard = false,
+    		bool rim = false
     		);
     
     /// Destructor.
@@ -506,8 +507,8 @@ protected:
         bool _invert;
     };
     
-    /// The three operating modes: free run, pulse tag and coherent integration
-    typedef enum { MODE_FREERUN, MODE_PULSETAG, MODE_CI } OperatingMode;
+    /// The three operating modes: free run, pulse tag, coherent integration, and coherent integration with RIM.
+    typedef enum { MODE_FREERUN, MODE_PULSETAG, MODE_CI, MODE_CI_RIM} OperatingMode;
     
     /// Return our operating mode: free run, pulse tag and coherent integration.
     /// @return operating mode: free run, pulse tag and coherent integration.
@@ -567,6 +568,8 @@ protected:
     OperatingMode _mode;
     /// Does radar start wait for an external trigger?
     bool _externalStartTrigger;
+    /// Are we operating in range imaging mode?
+    bool _rim;
 };
 
 }

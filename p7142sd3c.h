@@ -198,6 +198,11 @@ public:
     void setXmitStartTime(boost::posix_time::ptime startTime) {
         _xmitStartTime = startTime;
     }
+
+    /// @brief Are we operating in range imaging mode?
+    /// @return True if operating in RIM mode.
+    bool rim();
+
     /// @brief Read the ttl input lines from the fpga
     /// @return The input line values.
     unsigned short int TTLIn();

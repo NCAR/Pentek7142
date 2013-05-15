@@ -375,6 +375,11 @@ void p7142sd3c::stopFilters() {
 }
 
 //////////////////////////////////////////////////////////////////////
+bool p7142sd3c::rim() {
+	return _rim;
+}
+
+//////////////////////////////////////////////////////////////////////
 unsigned short int p7142sd3c::TTLIn() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 

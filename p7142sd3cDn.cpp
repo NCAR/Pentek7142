@@ -1018,7 +1018,6 @@ char*
 p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
-    int r;
     if (0) {
 		std::cout << "beam length is " << beamLength()
 				<< " (" << beamLength()/4 << " I/Q words)" << std::endl;
@@ -1032,6 +1031,7 @@ p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
 		}
     }
 
+    int r;
     while(1) {
         if (_firstRawBeam) {
             // skip over the first 64 bytes, assuming that
@@ -1040,10 +1040,6 @@ p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
             assert(r == 64);
             _firstRawBeam = false;
         }
-        //uint32_t* h = (uint32_t*) _buf;
-        //for (int i = 0; i < 16; i++) {
-        //	std::cout << i << " " << std::hex  << h[i] << std::endl;
-        //}
 
         // read one beam into buf
         r = read(_buf, _beamLength);

@@ -124,7 +124,7 @@ public:
             bool internalClock = false);
     
     /// @return The sd3c firmware revision number.
-    int sd3cRev() const { return(_sd3cRev); }
+    int sd3cRev() const;
 
     /// @brief Stop the DMA for a specified downconverter
     /// @param chan The desired channel

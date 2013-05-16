@@ -54,7 +54,11 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // Get the firmware revison and ddc type from the FPGA.
 	if (simulate) {
-		_sd3cRev = 1;
+		if (!_rim) {
+			_sd3cRev = 1;
+		} else {
+			_sd3cRev = 10000;
+		}
 		_ddcType = simulateDDCType;
 	} else {
 		_sd3cRev = _unpackSd3cRev();
@@ -780,6 +784,11 @@ int p7142sd3c::timerWidth(int timerNdx) const {
 //////////////////////////////////////////////////////////////////////
 bool p7142sd3c::timerInvert(int timerNdx) const {
     return(_timerConfigs[timerNdx].invert());
+}
+
+//////////////////////////////////////////////////////////////////////
+int p7142sd3c::sd3cRev() const {
+	return(_sd3cRev);
 }
 
 } // end namespace Pentek

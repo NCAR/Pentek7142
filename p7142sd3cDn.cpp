@@ -1021,14 +1021,15 @@ p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
     if (0) {
 		std::cout << "beam length is " << beamLength()
 				<< " (" << beamLength()/4 << " I/Q words)" << std::endl;
-		uint32_t bigbuf[10000];
-		read((char*)bigbuf, 4*10000);
-		for (int i = 0; i < 10000; i++) {
+		uint32_t bigbuf[2000];
+		read((char*)bigbuf, 4*2000);
+		for (int i = 0; i < 2000; i++) {
 			if (!(i %16)) {
 				std::cout << std::endl  << std::setw(6) << std::setfill(' ') << std::dec << i << " ";
 			}
 			std::cout << std::setw(8) << std::setfill('0') << std::hex << bigbuf[i] << " ";
 		}
+		std::cout << std::dec;
     }
 
     int r;
@@ -1390,8 +1391,8 @@ p7142sd3cDn::makeSimData(int n) {
             uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
             for (int freq = 0; freq < 4; freq++) {
             	for (int j = 0; j < 4; j++) {
-					//uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, _simPulseNum);
-					uint32_t tag = ciMakeTag(1, _chanId, (j>>1)&1, j&1, simPulseNum);
+					//uint32_t tag = ciMakeTag(2, _chanId, (j>>1)&1, j&1, _simPulseNum);
+					uint32_t tag = ciMakeTag(2, _chanId, (j>>1)&1, j&1, simPulseNum);
 					char* p = (char*)&tag;
 					for (int i = 0; i < 4; i++) {
 						_simFifo.push_back(p[i]);

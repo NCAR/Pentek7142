@@ -311,13 +311,13 @@ void p7142sd3c::timersStartStop(bool start) {
             // We assume here that the external trigger is a 1 PPS signal, 
             // e.g., from GPS.
             //
-            // Sleep until ~0.2 seconds after the top of a second. This gives
+            // Sleep until ~0.5 seconds after the top of a second. This gives
             // us a comfortable fraction of a second to set up timer start and 
             // know at precisely which second the timers will start. It also 
             // allows for our system clock to be off by up to 0.2 seconds.
             
-            // sleep until the next 0.2 second mark
-            int wake_uSec = 200000; // wake at 0.2 seconds after the top of a second
+            // sleep until the next 0.5 second mark
+            int wake_uSec = 500000; // wake at 0.5 seconds after the top of a second
             int usecNow = now.time_of_day().total_microseconds() % 1000000;
             int sleep_uSec = (1000000 + wake_uSec - usecNow) % 1000000;
             // Timers will start at the top of the next second after we wake

@@ -10,7 +10,7 @@ variables = eol_scons.GlobalVariables()
 
 tools = Split("""
 boost_mutex
-readyflow
+readyflow_usr_local
 doxygen
 """)
 

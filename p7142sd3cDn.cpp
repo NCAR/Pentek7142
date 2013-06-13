@@ -1358,7 +1358,10 @@ p7142sd3cDn::makeSimData(int n) {
 
             // Add IQ data. Occasionally drop some data
             bool doBadSync = ((1.0 * rand())/RAND_MAX) < 5.0e-6;
+            // Disable corrupted sync data for now.
             doBadSync = false;
+            // I and Q values from the CI are 4 byte values,
+            // so it will take 8 bytes for an I/Q pair.
             int nPairs = _beamLength/8;
             if (doBadSync) {
                 nPairs = (int)(((1.0 * rand())/RAND_MAX) * nPairs);
@@ -1402,7 +1405,10 @@ p7142sd3cDn::makeSimData(int n) {
 
             // Add IQ data. Occasionally drop some data
             bool doBadSync = ((1.0 * rand())/RAND_MAX) < 5.0e-6;
+            // Disable corrupted sync data for now.
             doBadSync = false;
+            // I and Q values from the CI are 4 byte values,
+            // so it will take 8 bytes for an I/Q pair.
             int nPairs = _beamLength/8;
             if (doBadSync) {
                 nPairs = (int)(((1.0 * rand())/RAND_MAX) * nPairs);

@@ -1263,8 +1263,8 @@ p7142sd3cDn::initBuffer() {
         // RIM coherent integration mode has:
         //   even 32 bit I and Q pairs followed by
         //   odd  32 bit I and Q pairs,
-        // for each gate.
-    	// For 4 frequencies.
+        // for each gate,
+    	// for 4 frequencies.
         _beamLength = 4*(_gates * 2 * 2 * 4);
         break;
     default:

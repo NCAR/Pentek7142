@@ -155,7 +155,8 @@ public:
     
     /// Get one or two beams of data. For free run and
     /// pulse tagger mode, one beam is returned. For the coherent integrator
-    /// mode, an even and an odd beam are returned.
+    /// mode, an even and an odd beam are returned. For multi-frequncy
+    /// modes (RIM), all frequencies are returned.
     /// @param[out] nPulsesSinceStart the number of pulses since the
     ///   xmitter was started up - allows computation of the time
     /// @return A pointer to one beam of data.

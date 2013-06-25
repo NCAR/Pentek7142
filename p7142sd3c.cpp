@@ -57,7 +57,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 		if (!_rim) {
 			_sd3cRev = 1;
 		} else {
-			_sd3cRev = 10000;
+			_sd3cRev = 10007;
 		}
 		_ddcType = simulateDDCType;
 	} else {

@@ -222,10 +222,6 @@ bool p7142sd3cDn::config() {
     // configure the fifo
     fifoConfig();
 
-    // Stop the filters from running
-    /// @todo a global stop of the filters doesn't really belong here.
-    _sd3c.stopFilters();
-
     // Is coherent integration enabled?
     DLOG << "coherent integration is " <<
           (_nsum > 1 ? "enabled" : "disabled");

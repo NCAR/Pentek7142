@@ -178,6 +178,9 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // set free run mode as appropriate
     loadFreeRun();
+
+    // stop the filters; to be started at the appropriate time by the user.
+    stopFilters();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -373,9 +376,13 @@ void p7142sd3c::stopFilters() {
     uint32_t temp;
     // stop the filters if they are running.
     P7142_REG_READ (_BAR2Base + KAISER_ADDR, temp);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
     P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_STOP);
     usleep(p7142::P7142_IOCTLSLEEPUS);
     P7142_REG_READ (_BAR2Base + KAISER_ADDR, temp);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
+
+    DLOG << "filters disabled";
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -112,11 +112,19 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     	P7142_REG_WRITE(_BAR2Base + RADAR_GATES, gates);
         usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (_BAR2Base + RADAR_GATES, temp);
-    	DLOG << "gate readback is " << temp;
-    	P7142_REG_WRITE(_BAR2Base + CI_NSUM, nsum);
+    	DLOG << "RADAR_GATES readback is " << temp;
+
+    	// nsum tells the firmware if we are in coherent integrator mode,
+    	// and if so, the number of sums performed by each of the paired
+    	// integrators. If nsum > 1, then we are in coherent integrator mode.
+    	// In this case, divide it in half, because thats the number that each
+    	// (even, odd pulse) integrator will nedd.
+    	/// @todo Fix the VHDL code, so that it performs the division
+    	/// by two, rather than doing it here.
+    	P7142_REG_WRITE(_BAR2Base + CI_NSUM, (_nsum < 2 ? _nsum : _nsum/2));
         usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (_BAR2Base + CI_NSUM, temp);
-    	DLOG << "nsum readback is " << temp;
+    	DLOG << "CI_NSUM readback is " << temp;
     }
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
@@ -632,18 +640,21 @@ int p7142sd3c::dataRate() {
         // even and odd pulses are separated by the prt, and so taken together they
         // run at half the prf. Each I and Q for a gate is 32 bits (wider than the
         // non-CI mode because they are sums of 16 bit numbers), so there are 8 bytes
-        // per gate for even and 8 bytes per gate for odd pulses.
-        rate = (int)((_prf/2)*(16+_gates*8*2)/_nsum);
+        // per gate for even and 8 bytes per gate for odd pulses. Nsum is the number of
+    	// pulses that were added in both the even and odd accumulators.
+        rate = (int)((_prf/_nsum)*(16+_gates*8*2));
         break;
     case MODE_CI_RIM:
         // coherent integration with range imaging
         // there is a 48 byte tag at the beginning of each pulse. Each pulse
-        // returns a set of even I's and Q's, and a set of odd I's and Q's. The
-        // even and odd pulses are separated by the prt, and so taken together they
+        // returns a set of even I's and Q's, and a set of odd I's and Q's, for
+    	// four frequencies. The even and odd pulses are separated
+    	// by the prt, and so taken together they
         // run at half the prf. Each I and Q for a gate is 32 bits (wider than the
         // non-CI mode because they are sums of 16 bit numbers), so there are 8 bytes
-        // per gate for even and 8 bytes per gate for odd pulses.
-        rate = (int)((_prf/2)*(48+_gates*8*2)/_nsum);
+        // per gate for even and 8 bytes per gate for odd pulses. Nsum is the number of
+    	// pulses that were added in both the even and odd accumulators.
+        rate = (int)((_prf/_nsum)*(48+ 4*_gates*8*2));
         break;
     }
 

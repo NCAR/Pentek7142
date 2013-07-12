@@ -192,6 +192,7 @@ int p7142::memRead(int bank, int32_t* buf, int bytes) {
 ////////////////////////////////////////////////////////////////////////////////////////
 bool
 p7142::_initReadyFlow() {
+
     _deviceHandle = NULL;
 
     /* initialize the PTK714X library */
@@ -228,11 +229,12 @@ p7142::_initReadyFlow() {
     DLOG << std::hex << " BAR2: 0x" << (void *)_BAR2Base;
     DLOG << std::dec;
 
+
     /// @todo Although we follow the normal ReadyFlow protocol
     /// for configuring the DAC (P7142SetDac5687Defaults()
     /// followed by P7142InitDac5687Regs()),
     /// the DAC is completely reconfigured in p7142Up().
-    /// MWe need to modify P7142SetDac5687Defaults() and
+    /// We need to modify P7142SetDac5687Defaults() and
     /// P7142InitDac5687Regs() to perform the correct configuration,
     /// so that it can be pulled out of p7142Up().
 
@@ -262,7 +264,14 @@ p7142::_initReadyFlow() {
     P7142InitOutputRegs (&_p7142OutParams,   &(_p7142Regs.BAR2RegAddr));
     P7142InitDac5687Regs(&_p7142OutParams,   &_p7142Dac5686Params,   &(_p7142Regs.BAR2RegAddr));
 
-    enableGateGen();
+    // Determine the gate generator register pointer
+    if (_p7142InParams.inputSyncBusSel == P7142_SYNC_BUS_SEL_A)
+        _gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateAGen);
+    else
+        _gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateBGen);
+
+    // Disable the gate generator so that the fifos don't run asynchronously,
+    disableGateGen();
 
     return true;
 }
@@ -305,21 +314,8 @@ void p7142::_configBoardParameters() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void p7142::_configInParameters() {
 
-    /* Sync Bus select */
+    // Sync Bus select
     _p7142InParams.inputSyncBusSel = P7142_SYNC_BUS_SEL_A;
-
-    ///@todo Currently using the GateFlow gating signal to
-    /// enable/disable data flow. Not sure that this is necessary
-    /// or even having any effect..
-
-    //set the gate generator register pointers */
-    if (_p7142InParams.inputSyncBusSel == P7142_SYNC_BUS_SEL_A)
-        gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateAGen);
-    else
-        gateGenReg = (volatile unsigned int *)(_p7142Regs.BAR2RegAddr.gateBGen);
-
-    // disable FIFO writes (set Gate in reset)
-    P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_DISABLE);
 
     // set the down conversion FIFO parameters
 
@@ -341,9 +337,14 @@ void p7142::_configInParameters() {
         // values for all programs.  The values shown here are the default
         // values and and are provided to show usage.  Their values must be
         // chosen to work with the DMA channel maximum burst count value.
-        //
         _p7142InParams.adcFifo[adchan].fifoAlmostEmptyLevel = 512;
         _p7142InParams.adcFifo[adchan].fifoAlmostFullLevel  = 544;
+
+        // Enable gate control
+        _p7142InParams.adcFifo[adchan].fifoGateControl = P7142_FIFO_GATE_ENABLE;
+        _p7142InParams.adcFifo[adchan].fifoGateSelect = P7142_FIFO_GATE_SELECT_A;
+        _p7142InParams.adcFifo[adchan].fifoGateTrigSelect = P7142_FIFO_GATE_OPERATION;
+
     }
 
 }
@@ -373,15 +374,17 @@ void p7142::_configOutParameters() {
 ////////////////////////////////////////////////////////////////////////////////////////
 void
 p7142::enableGateGen() {
-    // enable FIFO writes (release Gate from reset)
 
-    ///@todo Temporarily using the GateFlow gating signal to
-    /// enable/disable data flow. This will be changed to
-    /// using the timers for this purpose.
-    /// @todo It doesn't seem to make any difference whether the gate is on
-    /// or off. Need to track this down.
-    P7142_SET_GATE_GEN(&gateGenReg, P7142_GATE_GEN_ENABLE);
+	P7142_SET_GATE_GEN(_gateGenReg, P7142_GATE_GEN_ENABLE);
     DLOG << "GateGen enabled";
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+void
+p7142::disableGateGen() {
+
+	P7142_SET_GATE_GEN(_gateGenReg, P7142_GATE_GEN_DISABLE);
+    DLOG << "GateGen disabled";
 }
 
 ////////////////////////////////////////////////////////////////////////////////

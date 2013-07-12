@@ -367,7 +367,10 @@ void p7142sd3c::startFilters() {
     if (isSimulating())
         return;
 
-    // Start the DDC
+    // Enable all adc fifos by setting the global gate enable
+    enableGateGen();
+
+    // Start the DDC coefficient counters
     P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_START);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
@@ -389,6 +392,9 @@ void p7142sd3c::stopFilters() {
     usleep(p7142::P7142_IOCTLSLEEPUS);
     P7142_REG_READ (_BAR2Base + KAISER_ADDR, temp);
     usleep(p7142::P7142_IOCTLSLEEPUS);
+
+    // Disable all adc fifos by clearing the global gate enable
+    disableGateGen();
 
     DLOG << "filters disabled";
 }

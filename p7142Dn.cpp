@@ -59,8 +59,8 @@ p7142Dn::p7142Dn(
     // Size _readBuf appropriately.
     _readBuf.resize(2 * _DmaDescSize);
 
-    // Set up DMA
-    _initDma();
+    // Set up the fifo and DMA
+    _initFifoAndDma();
     
     // Start DMA
     _start();
@@ -211,15 +211,40 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 void
-p7142Dn::_initDma() {
-    // open a DMA channel (required before we allocate the buffer)
+p7142Dn::_initFifoAndDma() {
+
+    ////////////////////////// Fifo setup ///////////////////////////////
+
+    // Disable the fifo.
+	P7142_SET_FIFO_CTRL_FIFO_ENABLE(_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoCtrl,
+			P7142_FIFO_DISABLE);
+
+	// Set the fifo for this ADC channel to the parameters were set
+	// by p7142::_configInParameters()
+	P7142InitFifoRegs(&_p7142._p7142InParams.adcFifo[_chanId],
+			&(_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId]), P7142_FIFO_TYPE_ADC);
+
+    // Flush the fifo. The fifo will be reset. The almost empty and the almost full
+	// thresholds will also be set, and the fifo will be disabled.
+	P7142FlushFifo(&(_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId]),
+			&(_p7142._p7142InParams.adcFifo[_chanId]));
+
+    // Enable the fifo. The fen signal will not be active until the
+	// global gate is enabled.
+	P7142_SET_FIFO_CTRL_FIFO_ENABLE(_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoCtrl,
+			P7142_FIFO_ENABLE);
+
+    ////////////////////////// DMA setup ///////////////////////////////
+
+	// Open a DMA channel (required before we allocate the buffer)
     int status = PTK714X_DMAOpen(_p7142._deviceHandle, _chanId, &_dmaHandle);
     if (status != PTK714X_STATUS_OK) {
         ELOG << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << 
           _chanId;
         abort();
     }
-    // allocate DMA buffers, one per channel/descriptor pair.
+
+    // Allocate DMA buffers, one per channel/descriptor pair.
     for (int d = 0; d < 4; d++) {
         status = PTK714X_DMAAllocMem(_dmaHandle, _DmaDescSize, 
                 &_dmaBuf[d], (BOOL)0);
@@ -261,26 +286,26 @@ p7142Dn::_initDma() {
                 _DmaDescSize,                               /* transfer count in bytes */
                 PCI7142_DMA_DESCPTR_XFER_CNT_INTR_DISABLE,  /* DMA interrupt */
                 PCI7142_DMA_DESCPTR_XFER_CNT_CHAIN_NEXT,    /* type of descriptor */
-                (unsigned long)_dmaBuf[d].kernBuf);      /* buffer address */
+                (unsigned long)_dmaBuf[d].kernBuf);         /* buffer address */
     }
 
-    /* flush FIFO */
-    P7142FlushFifo(&(_p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId]),
-            &(_p7142._p7142InParams.adcFifo[_chanId]));
 
-    /* Flush the CPU caches */
+    // Flush the CPU caches
     for (int d = 0; d < 4; d++) {
         PTK714X_DMASyncCpu(&_dmaBuf[d]);
     }
 
-    // initialize the dma chain index
+    // Initialize the dma chain index
     _nextDesc = 0;
 
-    status = P7142InitDmaRegs(&_p7142._p7142DmaParams, &(_p7142._p7142Regs.BAR0RegAddr));
+    // Send the configuration to the DMA control registers
+    status = P7142InitDmaRegs(&_p7142._p7142DmaParams,
+    		&(_p7142._p7142Regs.BAR0RegAddr));
     if (status != 0) {
         ELOG << "Error " << status << 
           " initializing DMA registers for channel " << _chanId;
     }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -437,11 +462,6 @@ p7142Dn::_start() {
     P7142DmaChanInit(&(_p7142._p7142DmaParams.dmaChan[_chanId]),
                      &(_p7142._p7142Regs.BAR0RegAddr),
                      _chanId);
-
-    // enable the FIFO
-    P7142_SET_FIFO_CTRL_FIFO_ENABLE(
-            _p7142._p7142Regs.BAR2RegAddr.adcFifo[_chanId].FifoCtrl,
-        P7142_FIFO_ENABLE);
 
     // enable the DMA interrupt, on descriptor finish.
     // _dmaHandlerData contains a pointer to "this", as well

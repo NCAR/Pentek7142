@@ -184,10 +184,10 @@ namespace Pentek {
             /// @brief Return true iff we're in simulation mode.
             /// @return true iff we're in simulation mode.
             bool isSimulating() const { return _simulate; }
-            /// @todo Do we need to be calling these functions? It was done in 
-            /// the Linux driver and ReadyFlow, but they don't seem to do 
-            /// anything.
+            /// Turn on the global FIFO gate enable.
             void enableGateGen();
+            /// Turn off the global FIFO gate enable
+            void disableGateGen();
 
             /// @brief Construct and add a downconverter for one of our receiver channels.
             /// @param chanId The channel identifier (used to select /dn/*B)
@@ -394,9 +394,8 @@ namespace Pentek {
             P7142_DDR_MEM_PARAMS  _p7142MemParams;
             /// ReadyFlow parameters for DAC configuration.
             P7142_DAC5686_PARAMS  _p7142Dac5686Params;
-            /// The PCI address of the GateFlow gate generation control
-            /// register. It is not clear that we need to even use this.
-            volatile unsigned int *gateGenReg;
+            /// The PCI address of the GateFlow gate generation control register.
+            volatile unsigned int *_gateGenReg;
             /// set true if in simulation mode
             bool _simulate;
             /// recursive mutex which provides us thread safety.

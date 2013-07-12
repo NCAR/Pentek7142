@@ -100,9 +100,12 @@ class p7142Dn {
         /// as well while this method is executing.
         void _dmaInterrupt();
 
-        /// @brief Initialize DMA for a selected ADC channel. This *must*
-        /// happen before the associated downconverter is instantiated!
-        void _initDma();
+        /// @brief Initialize the fifo and DMA for a selected ADC channel.
+        /// The fifos will be configured to be gated by a gate signal,
+        /// which should be the global gate coming from the gate generator
+        /// register. That signal is controlled by p7142::disableGateGen()
+        /// and p7142::enableGateGen().
+        void _initFifoAndDma();
 
         /// @brief Read bytes from the ADC channel. If no data are
         /// available, the thread will be blocked. The request will not

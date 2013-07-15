@@ -374,7 +374,7 @@ void p7142sd3c::startFilters() {
     P7142_REG_WRITE(_BAR2Base + KAISER_ADDR, DDC_START);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
-    DLOG << "filters enabled";
+    DLOG << "fifos and filters enabled";
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -396,7 +396,7 @@ void p7142sd3c::stopFilters() {
     // Disable all adc fifos by clearing the global gate enable
     disableGateGen();
 
-    DLOG << "filters disabled";
+    DLOG << "fifos and filters disabled";
 }
 
 //////////////////////////////////////////////////////////////////////

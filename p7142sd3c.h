@@ -229,10 +229,17 @@ public:
     /// @return the name of the given DDCDECIMATETYPE
     static std::string ddcTypeName(DDCDECIMATETYPE type);
 
-    /// @brief Set the filter start bit, which starts the data flow for all channels.
+    /// @brief Start the fifos and the filters.
+    /// Enable the gate generator, which will enable all of the fen
+    /// generators at the same time. This  is how the downconverters are all
+    /// phase synchronized.Follow this with clear the filter stop bit,
+    /// which starts the filter coefficient counters running.
     void startFilters();
 
-    /// @brief Stop the filters
+    /// @brief Stop the fifos and filters.
+    /// Set the filter stop bit, which stops the filter coefficient
+    /// counters and resets them. Follow this with disabling the gate generator,
+    /// which will disable all of the fen generators at the same time.
     void stopFilters();
     
     /// @brief Return the transmit pulse width, in seconds

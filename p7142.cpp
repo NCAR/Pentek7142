@@ -1038,7 +1038,12 @@ p7142::circuitBoardTemp() const {
     Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),
             P7142_TWSI_ADDR_LM83, &tempMonValues);
     // The D3 temperature sensor is on the PCB.
-    return(tempMonValues.D3Temp);
+    int temp = tempMonValues.D3Temp;
+    // Pentek's library doesn't do the right thing unpacking temperatures
+    // below 0. Correct that here.
+    if (temp > 127)
+    	temp -= 256;
+    return(temp);
 }
 //////////////////////////////////////////////////////////////////////////////////
 int
@@ -1053,6 +1058,11 @@ p7142::fpgaTemp() const {
     Twsi_LM83GetValues((unsigned long)(_p7142Regs.BAR2RegAddr.twsiPort),
             P7142_TWSI_ADDR_LM83, &tempMonValues);
     // The D2 temperature sensor is on the signal processing FPGA.
-    return(tempMonValues.D2Temp);
+    int temp = tempMonValues.D2Temp;
+    // Pentek's library doesn't do the right thing unpacking temperatures
+    // below 0. Correct that here.
+    if (temp > 127)
+    	temp -= 256;
+    return(temp);
 }
 

@@ -155,13 +155,21 @@ public:
     
     /// Get one or two beams of data. For free run and
     /// pulse tagger mode, one beam is returned. For the coherent integrator
-    /// mode, an even and an odd beam are returned. For multi-frequncy
+    /// mode, an even and an odd beam are returned. For multi-frequency
     /// modes (RIM), all frequencies are returned.
     /// @param[out] nPulsesSinceStart the number of pulses since the
     ///   xmitter was started up - allows computation of the time
     /// @return A pointer to one beam of data.
     char* getBeam(int64_t& nPulsesSinceStart);
     
+    /// @brief Get a beam of pulse-tagged data and its associated extra
+    /// metadata.
+    /// @param[out] nPulsesSinceStart the number of pulses since the xmitter
+    ///   was started up - allows computation of the time
+    /// @param[out] angle1 rotation or azimuth angle of the beam
+    /// @param[out] angle2 tilt or elevation angle of the beam
+    char* getBeam(int64_t& nPulsesSinceStart, float& angle1, float& angle2);
+
     /// Return our gate count. For burst sampling channels, this may be
     /// different from the gate count set for our p7142sd3c object.
     /// @return the gate count for this downconverter.
@@ -201,10 +209,22 @@ protected:
     /// The pulse number in the beam is checked for dropped beams.
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
-    /// @param nPulsesSinceStart: the number of pulses since the
+    /// @param[out] nPulsesSinceStart: the number of pulses since the
+    ///   xmitter was started up - allows computation of the time
+    /// @param[out] angle1 the rotation/azimuth angle for this beam of data
+    /// @param[out] angle2 the tilt/elevation angle for this beam of data
+    /// @returns Pointer to the start of the beam.
+    char* ptBeamDecoded(int64_t & nPulsesSinceStart, float & angle1,
+            float & angle2);
+    /// Return the next synchronized beam of pulse tagger data, without extra
+    /// metadata.
+    /// The pulse number in the beam is checked for dropped beams.
+    /// Data associated with synchronization errors will be skipped.
+    /// The caller can access beamLength() bytes.
+    /// @param[out] nPulsesSinceStart: the number of pulses since the
     ///   xmitter was started up - allows computation of the time
     /// @returns Pointer to the start of the beam.
-    char* ptBeamDecoded(int64_t& nPulsesSinceStart);
+    char* ptBeamDecoded(int64_t & nPulsesSinceStart);
     /// Return the next synchronized beam of coherent integrator data.
     /// The pulse number in the beam is checked for dropped beams.
     /// Data associated with synchronization errors will be skipped.
@@ -213,7 +233,7 @@ protected:
     ///   xmitter was started up - allows computation of the time
     /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
-char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
+    char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// Return the next beam of free run data. This
     /// is a misnomer, since there aren't really beams in free run mode.
     /// Think of them as blocks. The caller can access beamLength() bytes.
@@ -222,8 +242,10 @@ char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
     /// @param pulseTag The pulse tag is returned here
+    /// @param extraMetadata extra metadata (of size extraMetadataLen()) will
+    /// be returned here.
     /// @returns Pointer to the start of the beam.
-    char* ptBeam(char* pulseTag);
+    char* ptBeam(char* pulseTag, char* extraMetadata);
     /// Return the next synchronized beam of coherent integrator data.
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
@@ -287,17 +309,30 @@ char* ciBeamDecoded(int64_t& nPulsesSinceStart, bool rim);
     /// is implmented in nextSimPulseNum().
     void makeSimData(int n);
     /// Decode the pulse tagger channel/pulse number word.
-    /// @param buf A pointer to the channel/pulse number word.
-    /// @param chan Return argument for the unpacked channel number.
-    /// @param pulseNum Return argument for the unpacked pulse number.
+    /// @param[in] buf A pointer to the channel/pulse number word.
+    /// @param[out] chan Return argument for the unpacked channel number.
+    /// @param[out] pulseNum Return argument for the unpacked pulse number.
     static void unpackPtChannelAndPulse(
             const char* buf,
             unsigned int & chan,
             unsigned int & pulseNum);
+    /// Decode extra metadata.
+    /// @param[in] buf A pointer to the extra metadata.
+    /// @param[out] angle1 the unpacked rotation/azimuth angle, in range
+    ///     [-180,180] degrees
+    /// @param[out] angle2 the unpacked tilt/elevation angle, in range
+    ///     [-180,180] degrees
+    static void unpackPtMetadata(const char* buf, float & angle1,
+            float & angle2);
     /// Print the size and the leading data in _simFifo.
     /// @param label A label.
     /// @param n The number of items to print
     void dumpSimFifo(std::string label, int n);
+    /// @brief Return the length of per-beam extra metadata for this
+    /// downconverter, in bytes.
+    /// @return the length of per-beam extra metadata for this downconverter,
+    /// in bytes.
+    int ptMetadataLen() const;
     
     /// The SD3C synchronization word value.
     static const uint32_t SD3C_SYNCWORD = 0xAAAAAAAA;

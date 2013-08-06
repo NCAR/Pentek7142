@@ -666,9 +666,20 @@ p7142sd3cDn::_simulatedRead(char* buf, int n) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-
 char*
-p7142sd3cDn::getBeam(int64_t& nPulsesSinceStart) {
+p7142sd3cDn::getBeam(int64_t & nPulsesSinceStart, float & angle1,
+        float & angle2) {
+    // This method only works for pulse-tagged data
+    if (_sd3c._operatingMode() != p7142sd3c::MODE_PULSETAG) {
+        ELOG << __PRETTY_FUNCTION__ << " only works for MODE_PULSETAG";
+        abort();
+    }
+    return(ptBeamDecoded(nPulsesSinceStart, angle1, angle2));
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+char*
+p7142sd3cDn::getBeam(int64_t & nPulsesSinceStart) {
 
     // perform the simulation wait if necessary
     //if (isSimulating()) {
@@ -701,12 +712,22 @@ p7142sd3cDn::beamLength() {
 
 //////////////////////////////////////////////////////////////////////////////////
 char*
-p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
+p7142sd3cDn::ptBeamDecoded(int64_t & nPulsesSinceStart) {
+    float angle1;
+    float angle2;
+    return(ptBeamDecoded(nPulsesSinceStart, angle1, angle2));
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+char*
+p7142sd3cDn::ptBeamDecoded(int64_t & nPulsesSinceStart, float & angle1,
+        float & angle2) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
     // get the beam
     char pulseTag[4];
-    char* buf = ptBeam(pulseTag);
+    char pulseMetadata[ptMetadataLen()];
+    char* buf = ptBeam(pulseTag, pulseMetadata);
 
     // unpack the channel number and pulse sequence number.
     // Unpack the 4-byte channel id/pulse number
@@ -724,6 +745,11 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
         // Just hijack the next pulse number, since we've got garbage for
         // the pulse anyway...
         pulseNum = _lastPulse + 1;
+    }
+
+    // Unpack the metadata
+    if (ptMetadataLen()) {
+        unpackPtMetadata(pulseMetadata, angle1, angle2);
     }
 
     // Initialize _lastPulse if this is the first pulse we've seen
@@ -769,15 +795,16 @@ p7142sd3cDn::ptBeamDecoded(int64_t& nPulsesSinceStart) {
 }
 //////////////////////////////////////////////////////////////////////////////////
 char*
-p7142sd3cDn::ptBeam(char* pulseTag) {
+p7142sd3cDn::ptBeam(char* pulseTag, char* metadata) {
     boost::recursive_mutex::scoped_lock guard(_mutex);
 
 	// How many sync errors at start?
     unsigned long startSyncErrors = _syncErrors;
 
-    // Number of bytes for a complete beam: data size (i.e., _beamLength) +
-    // 4 byte pulse tag + 4-byte sync word
-    const uint32_t BytesPerBeam = _beamLength + 8;
+    // Number of bytes for a complete beam: 4 byte pulse tag +
+    // DDC-specific extra metadata + data size (i.e., _beamLength) +
+    // 4-byte sync word.
+    const uint32_t BytesPerBeam = 4 + ptMetadataLen() + _beamLength + 4;
 
     // Temporary buffer to hold the 4-byte pulse tag, _beamLength bytes of data,
     // and the trailing sync word.
@@ -796,10 +823,11 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
             _firstRawBeam = false;
         }
 
-        // Read the 4-byte pulse tag, IQ beam data, and 4-byte sync word into
-        // tmpBuf (_beamLength + 8 bytes). Generally, we will the full length 
-        // here, but we may read fewer if we still have data in tmpBuf after 
-        // hunting for a sync word (see below).
+        // Read the 4-byte pulse tag, extra metadata, IQ beam data, and 4-byte
+        // sync word into tmpBuf (_beamLength + ptMetadataLen() +
+        // 8 bytes). Generally, we will read the full length here, but we may
+        // read fewer if we still have data in tmpBuf after hunting for a sync
+        // word (see below).
         int nToRead = BytesPerBeam - nInTmp;
         r = read(tmpBuf + nInTmp, nToRead);
         assert(r == nToRead);
@@ -810,7 +838,11 @@ p7142sd3cDn::ptBeam(char* pulseTag) {
         // middle, and (what should be) the sync word from the end.
         memcpy(pulseTag, tmpBuf, 4);
         
-        memcpy(_buf, tmpBuf + 4, _beamLength);
+        // Copy out the metadata
+        memcpy(metadata, tmpBuf + 4, ptMetadataLen());
+
+        // Copy the IQ data into _buf
+        memcpy(_buf, tmpBuf + 4 + ptMetadataLen(), _beamLength);
 
         uint32_t word;
         memcpy(&word, tmpBuf + BytesPerBeam - 4, 4);
@@ -1439,6 +1471,16 @@ p7142sd3cDn::unpackPtChannelAndPulse(const char* buf, unsigned int & chan,
 }
 
 //////////////////////////////////////////////////////////////////////////////////
+void
+p7142sd3cDn::unpackPtMetadata(const char* buf, float & angle1,
+        float & angle2) {
+    // The angles are packed in the first two 16-bit words of the metadata.
+    const int16_t * i16vals = reinterpret_cast<const int16_t *>(buf);
+    angle2 = 180. * (i16vals[0] / 32768.);  // tilt/elevation
+    angle1 = 180. * (i16vals[1] / 32768.);  // rotation/azimuth
+}
+
+//////////////////////////////////////////////////////////////////////////////////
 unsigned long
 p7142sd3cDn::droppedPulses() {
     //boost::recursive_mutex::scoped_lock guard(_mutex);
@@ -1469,6 +1511,18 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
     }
     out << std::dec;
     DLOG << out;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+int
+p7142sd3cDn::ptMetadataLen() const {
+    // Extra metadata is only with DDC8 (for now)
+    switch (_sd3c._ddcType) {
+    case p7142sd3c::DDC8DECIMATE:
+        return(24); // 6 extra words (24 bytes) of metadata for DDC8
+    default:
+        return(0);
+    }
 }
 
 } // end namespace Pentek

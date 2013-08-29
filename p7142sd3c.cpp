@@ -815,4 +815,15 @@ int p7142sd3c::sd3cRev() const {
 	return(_sd3cRev);
 }
 
+//////////////////////////////////////////////////////////////////////
+void p7142sd3c::zeroMotorCounts() {
+    // Bit zero of the TTL_OUT1 register enables zeroing of the counts for
+    // all motors being monitored. Set the bit to 1 to clear the counts, then
+    // set the bit back to 0 to resume normal quadrature counting.
+    uint16_t regVal = TTLIn();
+    TTLOut(regVal | 0x1);
+    usleep(500);    // leave the bit high for 500 us
+    TTLOut(regVal); // return to the original register value
+}
+
 } // end namespace Pentek

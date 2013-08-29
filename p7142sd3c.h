@@ -400,6 +400,11 @@ public:
 
     int64_t pulseAtTime(boost::posix_time::ptime time) const;
     
+    /// @brief Momentarily set the "zero motor counts" bit in the TTL_OUT1
+    /// register. This causes the firmware to zero the quadrature counts for all
+    /// motors being monitored.
+    void zeroMotorCounts();
+
     /// Epoch - 1970-01-01 00:00:00 UTC
 
     static const boost::posix_time::ptime Epoch1970;

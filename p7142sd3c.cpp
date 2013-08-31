@@ -125,6 +125,13 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         usleep(p7142::P7142_IOCTLSLEEPUS);
     	P7142_REG_READ (_BAR2Base + CI_NSUM, temp);
     	DLOG << "CI_NSUM readback is " << temp;
+
+        // Bit zero of the TTL_OUT1 register enables zeroing of the counts for
+        // all motors being monitored. At startup, we want this bit cleared.
+        DLOG << "Clearing the 'zero motor counts' bit";
+        uint16_t regVal = TTLIn();
+        TTLOut(regVal & ~0xfffe);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
     // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
@@ -820,10 +827,11 @@ void p7142sd3c::zeroMotorCounts() {
     // Bit zero of the TTL_OUT1 register enables zeroing of the counts for
     // all motors being monitored. Set the bit to 1 to clear the counts, then
     // set the bit back to 0 to resume normal quadrature counting.
+    ILOG << "Zeroing motor counts";
     uint16_t regVal = TTLIn();
-    TTLOut(regVal | 0x1);
-    usleep(500);    // leave the bit high for 500 us
-    TTLOut(regVal); // return to the original register value
+    TTLOut(regVal | 0x1);       // set the bit
+    usleep(500);                // leave the bit high for 500 us
+    TTLOut(regVal & 0xfffe);    // clear the bit
 }
 
 } // end namespace Pentek

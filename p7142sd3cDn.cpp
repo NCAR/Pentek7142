@@ -1474,10 +1474,16 @@ p7142sd3cDn::unpackPtChannelAndPulse(const char* buf, unsigned int & chan,
 void
 p7142sd3cDn::unpackPtMetadata(const char* buf, float & angle1,
         float & angle2) {
-    // The angles are packed in the first two 16-bit words of the metadata.
-    const int16_t * i16vals = reinterpret_cast<const int16_t *>(buf);
-    angle2 = 180. * (i16vals[0] / 32768.);  // tilt/elevation
-    angle1 = 180. * (i16vals[1] / 32768.);  // rotation/azimuth
+    // The angles are packed in the first two 32-bit words of the metadata.
+    const uint32_t * ui32vals = reinterpret_cast<const uint32_t *>(buf);
+    // The first 32-bit word is the rotation/azimuth angle
+    angle1 = (360. / 400000) * ui32vals[0];
+    // The second 32-bit word is the tilt/elevation angle
+    angle2 = (360. / 480000) * ui32vals[1];
+    // Move angle2 into range [-180,180]
+    if (angle2 > 180.0) {
+        angle2 -= 360.0;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////

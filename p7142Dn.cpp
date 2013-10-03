@@ -53,7 +53,7 @@ p7142Dn::p7142Dn(
     // Put a set of _DmaDescSize char buffers in the free buffer queue
     // for this channel. These buffers are used when pulling data 
     // from DMA.
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < N_READYFLOW_DMA_BUFFERS; i++) {
         _freeBuffers.push(new char[_DmaDescSize]);
     }
     // Size _readBuf appropriately.
@@ -387,7 +387,7 @@ p7142Dn::_dmaInterrupt() {
     if (nBufsRead > 1) {
         msgStream.clear();
         msgStream << "On channel " << _chanId << ", read " << nBufsRead << 
-            " DMA buffers at once\n";
+            " DMA buffers at once (warning only)\n";
         ELOG << msgStream.str();
     }
 

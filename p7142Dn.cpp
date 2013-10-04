@@ -384,12 +384,12 @@ p7142Dn::_dmaInterrupt() {
     }
     
     // Whine a little if we read more than one buffer in this call.
-    if (nBufsRead > 1) {
-        msgStream.clear();
-        msgStream << "On channel " << _chanId << ", read " << nBufsRead << 
-            " DMA buffers at once (warning only)\n";
-        ELOG << msgStream.str();
-    }
+    //if (nBufsRead > 1) {
+        //msgStream.clear();
+        //msgStream << "On channel " << _chanId << ", read " << nBufsRead <<
+        //    " DMA buffers at once (warning only)";
+        //ELOG << msgStream.str();
+    //}
 
 }
 

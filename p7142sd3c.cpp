@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <iostream>
+#include <csignal>
 
 #include <logx/Logging.h>
 LOGGING("p7142sd3c");
@@ -104,6 +105,19 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // stop the timers
     timersStartStop(false);
+    
+    // Make sure Option 428 is installed on this Pentek's FPGA, otherwise
+    // raise SIGINT to try to shut down cleanly.
+    uint32_t opt;
+    P7142_GET_CORE_OPTION(_p7142Regs.BAR2RegAddr.coreOption, opt);
+    if (opt != 0x428) {
+        // Option 428 is not installed, so complain and raise SIGINT in order
+        // to shut down cleanly.
+        ELOG << "SD3C requires Option 428, but it is not installed on Pentek card " <<
+                _cardIndex;
+        raise(SIGINT);
+        return;
+    }
     
     // Write the gate count and coherent integration registers
     if (! isSimulating()) {

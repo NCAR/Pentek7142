@@ -105,17 +105,27 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // stop the timers
     timersStartStop(false);
-    
-    // Make sure Option 428 is installed on this Pentek's FPGA, otherwise
-    // abort.
-    uint32_t opt;
-    P7142_GET_CORE_OPTION(_p7142Regs.BAR2RegAddr.coreOption, opt);
-    if (opt != 0x428) {
-        // Option 428 is not installed, so complain and abort.
-        ELOG << "SD3C requires Option 428, but it is not installed on Pentek card " <<
-                _cardIndex;
-        abort();
-        return;
+
+    // Read the PCI FPGA code revision register, and verify that it is
+    // from 2007-11-30 (or later).
+    if (! simulate) {
+        uint32_t pciFpgaRev;
+        P7142_REG_READ(_p7142Regs.BAR0RegAddr.fpgaRevision, pciFpgaRev);
+        // The upper 24 bits of pciFpgaRev hold the revision date in weird
+        // binary coded decimal form, i.e., 2007-11-30 becomes the 24-bit 
+        // value 0x071130. We add 0x20000000 to get the full 4-digit year,
+        // i.e., 0x20071130.
+        uint32_t revDate = (pciFpgaRev >> 8) + 0x20000000;
+        DLOG << "Card " << _cardIndex << " PCI FPGA rev date " << std::hex << 
+            revDate << std::dec;
+        if (revDate < 0x20071130) {
+            ELOG << "Card " << _cardIndex << 
+                " has Pentek PCI FPGA code dated " <<
+                std::hex << revDate << std::dec <<
+                ", but 20071130 or later is required.";
+            abort();
+            return;
+        }
     }
     
     // Write the gate count and coherent integration registers

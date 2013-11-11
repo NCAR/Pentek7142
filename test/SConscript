@@ -22,7 +22,7 @@ headers = Split("""
 
 env = Environment(tools = ['default'] + tools)
 
-html = env.Apidocs(sources + headers, DOXYFILE_FILE = "Doxyfile")
+html = env.Apidocs(sources + headers)
 
 capture = env.Program('capture', 'capture.cpp')
 

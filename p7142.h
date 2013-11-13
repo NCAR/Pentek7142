@@ -313,7 +313,6 @@ namespace Pentek {
             /// @param p7142Regs Pointer to the 7142 register address table
             /// @param bank Memory bank to write to. Use defines P7142_DDR_MEM_BANK0,
             /// P7142_DDR_MEM_BANK1 or P7142_DDR_MEM_BANK2
-            /// @param bankStartAddr Address in the bank at which to start reading
             /// @param dataLen Number of bytes to write. Yes, BYTES
             /// @param dataBuf Pointer to the data buffer containing the data
             /// @param hDev The 7142 Device Handle

@@ -1111,15 +1111,15 @@ p7142sd3cDn::frBeam() {
 bool
 p7142sd3cDn::ciCheckTag(char* p, unsigned int& pulseNum) {
 
-// The tag order:
-//  --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+// The tag and data order:
+//  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) IQpairs,odd pulse
 //
 // The CI tag:
-//  --! bits 31:28  Format number   0-15(4 bits)
-//  --! bits 27:26  Channel number  0-3 (2 bits)
-//  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-//  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-//  --! bits 23:00  Sequence number     (24 bits)
+//  bits 31:28  Format number   0-15(4 bits)
+//  bits 27:26  Channel number  0-3 (2 bits)
+//  bits    25  0=even, 1=odd   0-1 (1 bit)
+//  bit     24  0=I, 1=Q        0-1 (1 bit)
+//  bits 23:00  Sequence number     (24 bits)
 
     int format[4];
     int chan[4];
@@ -1155,19 +1155,19 @@ p7142sd3cDn::ciCheckTagRim(char* p, unsigned int& pulseNum) {
 
 	//  In range imaging mode, the tags are repeated four times (once per frequency)
 	//
-	// The tag order:
-	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
-	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
-	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
-	// <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD>
-	// <IQpairs,even pulse><IQpairs,odd pulse>
+	// The tag and data order:
+	// (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD)
+	// (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD)
+	// (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD)
+	// (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD)
+	// (IQpairs,even_pulse) IQpairs,odd pulse
 	//
 	// The CI tag:
-	//  --! bits 31:28  Format number   0-15(4 bits)
-	//  --! bits 27:26  Channel number  0-3 (2 bits)
-	//  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-	//  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-	//  --! bits 23:00  Sequence number     (24 bits)
+	//  bits 31:28  Format number   0-15(4 bits)
+	//  bits 27:26  Channel number  0-3 (2 bits)
+	//  bits    25  0=even, 1=odd   0-1 (1 bit)
+	//  bit     24  0=I, 1=Q        0-1 (1 bit)
+	//  bits 23:00  Sequence number     (24 bits)
 
     int format[16];
     int chan[16];
@@ -1206,11 +1206,11 @@ p7142sd3cDn::ciCheckTagRim(char* p, unsigned int& pulseNum) {
 uint32_t
 p7142sd3cDn::ciMakeTag(int format, int chan, bool odd, bool Q, uint32_t seq) {
     /// The CI tag:
-    ///  --! bits 31:28  Format number   0-15(4 bits)
-    ///  --! bits 27:26  Channel number  0-3 (2 bits)
-    ///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-    ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-    ///  --! bits 23:00  Sequence number     (24 bits)
+    ///  bits 31:28  Format number   0-15(4 bits)
+    ///  bits 27:26  Channel number  0-3 (2 bits)
+    ///  bits    25  0=even, 1=odd   0-1 (1 bit)
+    ///  bit     24  0=I, 1=Q        0-1 (1 bit)
+    ///  bits 23:00  Sequence number     (24 bits)
 
     int Odd = odd? 1:0;
     int IQ   =  Q? 1:0;
@@ -1234,11 +1234,11 @@ p7142sd3cDn::ciMakeTag(int format, int chan, bool odd, bool Q, uint32_t seq) {
 void
 p7142sd3cDn::ciDecodeTag(uint32_t tag, int& format, int& chan, bool& odd, bool& Q, uint32_t& seq) {
     /// The CI tag, in little endian format as described in VHDL:
-    ///  --! bits 31:28  Format number   0-15(4 bits)
-    ///  --! bits 27:26  Channel number  0-3 (2 bits)
-    ///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-    ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-    ///  --! bits 23:00  Sequence number     (24 bits)
+    ///  bits 31:28  Format number   0-15(4 bits)
+    ///  bits 27:26  Channel number  0-3 (2 bits)
+    ///  bits    25  0=even, 1=odd   0-1 (1 bit)
+    ///  bit     24  0=I, 1=Q        0-1 (1 bit)
+    ///  bits 23:00  Sequence number     (24 bits)
 
     format =        (tag >> 28) & 0xf;
     chan   =        (tag >> 26) & 0x3;
@@ -1366,13 +1366,13 @@ p7142sd3cDn::makeSimData(int n) {
         case p7142sd3c::MODE_CI: {
             /// Add the coherent integration tag for this sample:
 
-            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            ///  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) ((IQpairs,odd_pulse))
             ///
-            ///  --! bits 31:28  Format number   0-15(4 bits)
-            ///  --! bits 27:26  Channel number  0-3 (2 bits)
-            ///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-            ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-            ///  --! bits 23:00  Sequence number     (24 bits)
+            ///  bits 31:28  Format number   0-15(4 bits)
+            ///  bits 27:26  Channel number  0-3 (2 bits)
+            ///  bits    25  0=even, 1=odd   0-1 (1 bit)
+            ///  bit     24  0=I, 1=Q        0-1 (1 bit)
+            ///  bits 23:00  Sequence number     (24 bits)
 
             uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
             for (int j = 0; j < 4; j++) {
@@ -1408,16 +1408,16 @@ p7142sd3cDn::makeSimData(int n) {
         case p7142sd3c::MODE_CI_RIM: {
             /// Add the coherent integration (RIM) tag for this sample:
 
-            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
-            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
-            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
-            /// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
+            ///  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) (IQpairs,odd_pulse)
+            ///  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) (IQpairs,odd_pulse)
+            ///  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) (IQpairs,odd_pulse)
+            ///  (TAG_I_EVEN) (TAG_Q_EVEN) (TAG_I_ODD) (TAG_Q_ODD) (IQpairs,even_pulse) (IQpairs,odd_pulse)
             ///
-            ///  --! bits 31:28  Format number   0-15(4 bits) (==2)
-            ///  --! bits 27:26  Channel number  0-3 (2 bits)
-            ///  --! bits    25  0=even, 1=odd   0-1 (1 bit)
-            ///  --! bit     24  0=I, 1=Q        0-1 (1 bit)
-            ///  --! bits 23:00  Sequence number     (24 bits)
+            ///  bits 31:28  Format number   0-15(4 bits) (==2)
+            ///  bits 27:26  Channel number  0-3 (2 bits)
+            ///  bits    25  0=even, 1=odd   0-1 (1 bit)
+            ///  bit     24  0=I, 1=Q        0-1 (1 bit)
+            ///  bits 23:00  Sequence number     (24 bits)
 
             uint32_t simPulseNum = _sd3c.nextSimPulseNum(_chanId);
             for (int freq = 0; freq < 4; freq++) {

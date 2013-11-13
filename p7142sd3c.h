@@ -69,6 +69,7 @@ public:
     ///     simulated data when calling read()
     /// @param useFirstCard If true, use the first card in the system. Otherwise,
     ///     the next card will be searched for.
+    /// @param rim If true, we are operating in RIM mode.
     p7142sd3c(
     		bool simulate,
     		double tx_delay,

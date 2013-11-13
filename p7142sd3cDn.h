@@ -76,20 +76,20 @@ class p7142sd3c;
 /// tagger produces. The coherent integrator data format is documented in the 
 /// SD3C VHDL as follows:
 /// @code
-/// --! <TAG_I_EVEN><TAG_Q_EVEN><TAG_I_ODD><TAG_Q_ODD><IQpairs,even pulse><IQpairs,odd pulse>
-/// --!
-/// --! The TAG is broken down as:
-/// --! bits 31:28  Format number   0-15(4 bits)
-/// --! bits 27:26  Channel number  0-3 (2 bits)
-/// --! bit     25  0=even, 1=odd   0-1 (1 bit)
-/// --! bit     24  0=I, 1=Q        0-1 (1 bit)
-/// --! bits 23:00  Sequence number     (24 bits)
-/// --!
-/// --!
-/// --! The four tags at the beginning should all have the same sequence number,
-/// --! verifying that the individual accumulators are working in sequence.
-/// --! The sequence number increments by one for each output sum from
-/// --! an accumulator.
+/// TAG_I_EVEN TAG_Q_EVEN TAG_I_ODD TAG_Q_ODD IQpairs,even pulse IQpairs,odd pulse
+///
+/// The TAG is broken down as:
+/// bits 31:28  Format number   0-15(4 bits)
+/// bits 27:26  Channel number  0-3 (2 bits)
+/// bit     25  0=even, 1=odd   0-1 (1 bit)
+/// bit     24  0=I, 1=Q        0-1 (1 bit)
+/// bits 23:00  Sequence number     (24 bits)
+///
+///
+/// The four tags at the beginning should all have the same sequence number,
+/// verifying that the individual accumulators are working in sequence.
+/// The sequence number increments by one for each output sum from
+/// an accumulator.
 /// @endcode
 class p7142sd3cDn : public p7142Dn {
 public:
@@ -250,14 +250,12 @@ protected:
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
     /// @param pulseNum The pulse number is returned here
-    /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
     char* ciBeam(unsigned int& pulseNum);
     /// Return the next synchronized beam of RIM coherent integrator data.
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
     /// @param pulseNum The pulse number is returned here
-    /// @param rim Set true if we are operating in range imaging mode.
     /// @returns Pointer to the start of the beam.
     char* ciBeamRim(unsigned int& pulseNum);
     /// Check that a coherent integrator tag is

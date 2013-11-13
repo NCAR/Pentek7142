@@ -701,6 +701,8 @@ p7142sd3cDn::getBeam(int64_t & nPulsesSinceStart) {
                 _sd3c._operatingMode();
             abort();
     }
+
+    return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1039,6 +1041,8 @@ p7142sd3cDn::ciBeam(unsigned int& pulseNum) {
             }
         }
     }
+
+    return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1095,6 +1099,8 @@ p7142sd3cDn::ciBeamRim(unsigned int& pulseNum) {
             }
         }
     }
+
+    return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1146,7 +1152,7 @@ p7142sd3cDn::ciCheckTag(char* p, unsigned int& pulseNum) {
     retval = retval && !Odd[0] && !Odd[1] && Odd[2] && Odd[3];
     retval = retval &&   !Q[0] &&    Q[1] &&  !Q[2] &&   Q[3];
 
-    return retval;;
+    return retval;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1199,7 +1205,7 @@ p7142sd3cDn::ciCheckTagRim(char* p, unsigned int& pulseNum) {
 		retval = retval &&   !Q[0+4*f] &&    Q[1+4*f] &&  !Q[2+4*f] &&   Q[3+4*f];
 	}
 
-    return retval;;
+    return retval;
 }
 
 //////////////////////////////////////////////////////////////////////////////////

@@ -1030,7 +1030,7 @@ int
 p7142::circuitBoardTemp() const {
     // Return a fixed value if simulating
     if (_simulate) {
-        return(35.0);
+        return(35);
     }
 
     LM83_VALUES     tempMonValues;
@@ -1050,7 +1050,7 @@ int
 p7142::fpgaTemp() const {
     // Return a fixed value if simulating
     if (_simulate) {
-        return(50.0);
+        return(50);
     }
 
     LM83_VALUES     tempMonValues;

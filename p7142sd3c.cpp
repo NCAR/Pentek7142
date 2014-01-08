@@ -83,7 +83,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     }
 
     // Announce the FPGA firmware revision
-    DLOG << "SD3C revision: " << std::dec << _sd3cRev;
+    ILOG << "Card " << _cardIndex << " SD3C revision: " << std::dec << 
+            _sd3cRev;
     if (_sd3cRev == 0) {
         std::cerr << "** WARNING: Revision number is zero. " <<
                 "Was the correct firmware loaded?" << std::endl;

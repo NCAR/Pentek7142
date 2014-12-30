@@ -70,6 +70,7 @@ public:
     /// @param useFirstCard If true, use the first card in the system. Otherwise,
     ///     the next card will be searched for.
     /// @param rim If true, we are operating in RIM mode.
+    /// @param adc_clock - if non-zero, override the default adc_clock from DDC Type.
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -84,7 +85,8 @@ public:
     		bool externalStartTrigger = false,
     		double simPauseMS = 50,
     		bool useFirstCard = false,
-    		bool rim = false
+    		bool rim = false,
+                double adc_clock = 0
     		);
     
     /// Destructor.

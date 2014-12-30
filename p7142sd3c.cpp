@@ -32,7 +32,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     unsigned int gates, unsigned int nsum, bool freeRun, 
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS,
     bool useFirstCard,
-    bool rim) :
+    bool rim,
+    double adc_clock) :
         p7142(simulate, simPauseMS, useFirstCard),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
@@ -54,34 +55,39 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     }
 
     // Get the firmware revison and ddc type from the FPGA.
-	if (simulate) {
-		if (!_rim) {
-			_sd3cRev = 1;
-		} else {
-			_sd3cRev = 10007;
-		}
-		_ddcType = simulateDDCType;
-	} else {
-		_sd3cRev = _unpackSd3cRev();
-		_ddcType = _unpackDdcType();
-	}
-
-    // Set the ADC clock rate based on DDC type
-    switch (_ddcType) {
-    case DDC10DECIMATE:
-        _adc_clock = 100.0e6;
-        break;
-    case DDC8DECIMATE:
-        _adc_clock = 125.0e6;
-        break;
-    case DDC4DECIMATE:
-        _adc_clock = 48.0e6;
-        break;
-    case BURST:
-        _adc_clock = 100.0e6;
-        break;
+    if (simulate) {
+      if (!_rim) {
+        _sd3cRev = 1;
+      } else {
+        _sd3cRev = 10007;
+      }
+      _ddcType = simulateDDCType;
+    } else {
+      _sd3cRev = _unpackSd3cRev();
+      _ddcType = _unpackDdcType();
     }
-
+    
+    if (adc_clock == 0) {
+      // Set the ADC clock rate based on DDC type
+      switch (_ddcType) {
+        case DDC10DECIMATE:
+          _adc_clock = 100.0e6;
+          break;
+        case DDC8DECIMATE:
+          _adc_clock = 125.0e6;
+          break;
+        case DDC4DECIMATE:
+          _adc_clock = 48.0e6;
+          break;
+        case BURST:
+          _adc_clock = 100.0e6;
+          break;
+      }
+    } else {
+      // set from the parameter passed in
+      _adc_clock = adc_clock;
+    }
+        
     // Announce the FPGA firmware revision
     ILOG << "Card " << _cardIndex << " SD3C revision: " << std::dec << 
             _sd3cRev;

@@ -824,13 +824,12 @@ p7142sd3cDn::ptBeamDecoded(int64_t & nPulsesSinceStart, float & angle1,
                 pulseNum << "!";
         abort();
     } else if (delta != 1) {
-        ELOG << _lastPulse << "->" << pulseNum << ": ";
         if (delta < 0) {
             ELOG << "Channel " << _chanId << " went BACKWARD " <<
-                -delta << " pulses";
+                -delta << " pulses: " << _lastPulse << "->" << pulseNum;
         } else {
             ELOG << "Channel " << _chanId << " dropped " <<
-                delta - 1 << " pulses";
+                delta - 1 << " pulses: " << _lastPulse << "->" << pulseNum;
         }
     }
 

@@ -1,6 +1,7 @@
 #ifndef P7142DN_H_
 #define P7142DN_H_
 
+#include <exception>
 #include <string>
 #include <boost/thread/recursive_mutex.hpp>
 #include "p7142.h"
@@ -11,8 +12,6 @@ namespace Pentek {
 /// This class reads and controls downconversion for one receiver channel of a
 /// P7142 transceiver card.
 class p7142Dn {
-/// Define the number of DMA buffers available for the Readyflow DMA interrupt handler.
-#define N_READYFLOW_DMA_BUFFERS 100
 
 public:
     /// Constructor
@@ -69,9 +68,16 @@ public:
         /// @return true iff we are simulating a P7142 card rather than using
         /// a real one.
         bool isSimulating() const { return _p7142.isSimulating(); }
-        
-
+        /// Exception type thrown when DMA overrun errors occur
+        class DMA_OverrunError : public std::runtime_error {
+        public:
+            explicit DMA_OverrunError(const std::string & what_msg) : 
+                    std::runtime_error(what_msg) {}
+        };
     protected:
+        /// Define the number of DMA buffers available for the Readyflow DMA interrupt handler.
+        static const int N_READYFLOW_DMA_BUFFERS = 100;
+        
         /// @brief Start Pentek writing to DMA for this channel.
         void _start();
         /// @brief Stop Pentek from writing to DMA for this channel.

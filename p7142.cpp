@@ -99,6 +99,9 @@ p7142::~p7142() {
     }
     // empty the list of active down converters
     _downconverters.erase(_downconverters.begin(), _downconverters.end());
+    
+    // delete the upconverter, if any
+    delete _upconverter;
 
     /* cleanup for exit */
     PTK714X_DeviceClose(_deviceHandle);

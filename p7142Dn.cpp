@@ -345,11 +345,9 @@ p7142Dn::_dmaInterrupt() {
     if (currDmaDesc == _nextDesc) {
         msgStream << "ERROR! Channel " << _chanId << 
             " wants to read descriptor " << _nextDesc << 
-            " while DMA is in progress there! Likely overrun!\n";
+            " while DMA is in progress there! Likely overrun!";
         ELOG << msgStream.str();
-        // Skip reading this descriptor, since the old data we want is being
-        // overwritten right now!
-        _nextDesc = (_nextDesc + 1) % 4;
+        throw DMA_OverrunError(msgStream.str());
     }
 
     // Read up to the descriptor buffer currently being written via DMA. When 
@@ -361,7 +359,8 @@ p7142Dn::_dmaInterrupt() {
         // Make sure we have a buffer available in _freeBuffers
         if (_freeBuffers.empty()) {
             msgStream << "Dropping data on channel " << _chanId << 
-                ", no free buffers available!\n";
+                ", no free buffers (of " << N_READYFLOW_DMA_BUFFERS << 
+                ") available!";
             ELOG << msgStream.str();
             break;
         }
@@ -383,13 +382,13 @@ p7142Dn::_dmaInterrupt() {
         _nextDesc = (_nextDesc + 1) % 4;
     }
     
-    // Whine a little if we read more than one buffer in this call.
-    //if (nBufsRead > 1) {
-        //msgStream.clear();
-        //msgStream << "On channel " << _chanId << ", read " << nBufsRead <<
-        //    " DMA buffers at once (warning only)";
-        //ELOG << msgStream.str();
-    //}
+//    // Whine a little if we read more than one buffer in this call.
+//    if (nBufsRead > 1) {
+//        msgStream.clear();
+//        msgStream << "On channel " << _chanId << ", read " << nBufsRead <<
+//            " DMA buffers at once (warning only)";
+//        WLOG << msgStream.str();
+//    }
 
 }
 
@@ -480,7 +479,7 @@ p7142Dn::_start() {
     DLOG << "DMA interrupt enabled for channel " << _chanId;
 
     // Enable the DMA. Transfers will not occur however until the GateFlow
-    // FIFOs start receiveing data, which will take place when the sd3c
+    // FIFOs start receiving data, which will take place when the sd3c
     // timers are started.
     P7142DmaStart(&(_p7142._p7142Regs.BAR0RegAddr), _chanId);
 

@@ -343,11 +343,12 @@ p7142Dn::_dmaInterrupt() {
             _p7142._p7142Regs.BAR0RegAddr.dmaCurrXferCounter[_chanId], currDmaDesc);
     
     if (currDmaDesc == _nextDesc) {
-        msgStream << "ERROR! Channel " << _chanId << 
-            " wants to read descriptor " << _nextDesc << 
-            " while DMA is in progress there! Likely overrun!";
-        ELOG << msgStream.str();
-        throw DMA_OverrunError(msgStream.str());
+        ELOG << "ERROR! DMA overrun on channel " << _chanId << 
+                ". Raising signal SIGUSR2.";
+        // Raise the SIGUSR2 signal, which can be caught by the main program
+        // to initiate a restart if desired.
+        raise(SIGUSR2);
+        return;
     }
 
     // Read up to the descriptor buffer currently being written via DMA. When 

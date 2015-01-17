@@ -47,7 +47,10 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         _codeLength(codeLength) {
 
 	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
-
+	// If the p7142 constructor had a problem, just return now
+	if (! _isReady) {
+	    return;
+	}
     // sanity check
     if (_nsum < 1) {
         std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<

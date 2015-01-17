@@ -214,6 +214,7 @@ p7142::_initReadyFlow() {
     {
       ELOG << "Pentek 7142 device not found when opening card " << 
         _NumOpenCards;
+      return false;
     }
 
     /* Initialize 7142 register address tables */

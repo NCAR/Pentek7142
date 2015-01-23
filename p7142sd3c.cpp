@@ -33,7 +33,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS,
     bool useFirstCard,
     bool rim,
-	int codeLength) :
+	int codeLength,
+    double adc_clock) :
         p7142(simulate, simPauseMS, useFirstCard),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
@@ -70,21 +71,26 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 		_sd3cRev = _unpackSd3cRev();
 		_ddcType = _unpackDdcType();
 	}
-
-    // Set the ADC clock rate based on DDC type
-    switch (_ddcType) {
-    case DDC10DECIMATE:
-        _adc_clock = 100.0e6;
-        break;
-    case DDC8DECIMATE:
-        _adc_clock = 125.0e6;
-        break;
-    case DDC4DECIMATE:
-        _adc_clock = 48.0e6;
-        break;
-    case BURST:
-        _adc_clock = 100.0e6;
-        break;
+    
+    if (adc_clock == 0) {
+      // Set the ADC clock rate based on DDC type
+      switch (_ddcType) {
+        case DDC10DECIMATE:
+          _adc_clock = 100.0e6;
+          break;
+        case DDC8DECIMATE:
+          _adc_clock = 125.0e6;
+          break;
+        case DDC4DECIMATE:
+          _adc_clock = 48.0e6;
+          break;
+        case BURST:
+          _adc_clock = 100.0e6;
+          break;
+      }
+    } else {
+      // set from the parameter passed in
+      _adc_clock = adc_clock;
     }
 
     // Announce the FPGA firmware revision

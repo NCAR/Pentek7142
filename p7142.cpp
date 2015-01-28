@@ -107,8 +107,10 @@ p7142::~p7142() {
     PTK714X_DeviceClose(_deviceHandle);
     _NumOpenCards--;
     
-    /* If there are no instances left, close up the ReadyFlow library */
+    // If there are no instances left, set to open the first Pentek card by
+    // default on the next instantiation, and close up the ReadyFlow library.
     if (_NumOpenCards == 0) {
+        _Next7142Slot = -2; // use the first card in the system next time
         PTK714X_LibUninit();
         DLOG << "ReadyFlow closed";
     }

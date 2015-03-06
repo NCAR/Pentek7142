@@ -192,6 +192,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  tx_pulsewidth: " << tx_pulsewidth;
     DLOG << "  prt: " << _prt;
     DLOG << "  prt2: " << _prt2;
+    DLOG << "  prtCounts: " << _prtCounts;
+    DLOG << "  prt2Counts: " << _prt2Counts;
     DLOG << "  prf: " << _prf << " Hz";
     DLOG << "  prf2: " << _prf2 << " Hz";
     DLOG << "  staggeredPrt: " << staggeredPrt;
@@ -588,6 +590,12 @@ p7142sd3c::initTimers() {
         Y = (int) (X * prt2_ms / prt_ms);
 
         PrtScheme = (Y << 4) | X;
+
+        DLOG << "Staggered, PrtScheme: " << PrtScheme;
+        DLOG << "  prt_ms: " << prt_ms;
+        DLOG << "  prt2_ms: " << prt2_ms;
+        DLOG << "  X, Y: " << X << ", " << Y;
+
     } else {
         // Single prt
     	// PRT must be integral multiple of pulsewidth !

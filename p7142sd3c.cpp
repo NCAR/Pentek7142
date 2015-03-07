@@ -578,26 +578,46 @@ p7142sd3c::initTimers() {
     //       for DDC4: 24 MHz; for DDC8: 62.5 MHz
 
     int X, Y;
-    float prt_ms, prt2_ms;
+    double prt_ms, prt2_ms;
 
     if (_staggeredPrt == true) {
         // dual prt
         prt_ms = countsToTime(_prtCounts) * 1000;
         prt2_ms = countsToTime(_prt2Counts) * 1000;
+        double prt_ratio = prt2_ms / prt_ms;
+        int rounded_ratio = (int) (prt_ratio + 0.5);
+        periodCount =
+          timeToCounts(prt_ms * (prt_ratio - rounded_ratio) / rounded_ratio * 0.001);
 
-        periodCount = timeToCounts(prt_ms * (prt2_ms / prt_ms - (int) (prt2_ms
-                / prt_ms)) / (int) (prt2_ms / prt_ms) * 0.001);
-
-        X = (int) ((int) (prt2_ms / prt_ms) / 
-                (prt2_ms / prt_ms - (int) (prt2_ms / prt_ms)));
-        Y = (int) (X * prt2_ms / prt_ms);
+        double xx = rounded_ratio / (prt_ratio - rounded_ratio);
+        double yy = xx * prt_ratio;
+        
+        X = (int) (rounded_ratio / (prt_ratio - rounded_ratio) + 0.5);
+        Y = (int) (X * prt_ratio + 0.5);
 
         PrtScheme = (Y << 4) | X;
+
+        char text[128];
+
+        DLOG << "Staggered, PrtScheme: " << PrtScheme;
+        sprintf(text, "  prt_ms:    %.12f", prt_ms);
+        DLOG << text;
+        sprintf(text, "  prt2_ms:   %.12f", prt2_ms);
+        DLOG << text;
+        sprintf(text, "  prt_ratio: %.12f", prt_ratio);
+        DLOG << text;
+        DLOG << "  rounded_ratio: " << rounded_ratio;
+        sprintf(text, "  xx, yy: %.12f, %.12f", xx, yy);
+        DLOG << text;
+        DLOG << "  X, Y: " << X << ", " << Y;
+
     } else {
+
         // Single prt
     	// PRT must be integral multiple of pulsewidth !
         periodCount = _prtCounts;
         PrtScheme = 0x0000;
+
     }
 
     DLOG << "periodCount is " << periodCount;

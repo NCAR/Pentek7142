@@ -570,6 +570,7 @@ int p7142sd3cDn::filterSetup() {
             	gaussianFilterName += "_pulsecode";
             }
 
+            DLOG << "DDC4DECIMATE filterWidthUs: " << filterWidthUs;
             break;
         }
         case p7142sd3c::DDC10DECIMATE: {    // pulse_width in 50 MHz counts

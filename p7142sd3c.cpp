@@ -323,17 +323,20 @@ p7142sd3c::countsToTime(int counts) const {
 }
 
 /////////////////////////////////////////////////////////////////////////
-void p7142sd3c::timersStartStop(bool start) {
+bool p7142sd3c::timersStartStop(bool start) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate) {
         setXmitStartTime(microsec_clock::universal_time());
-        return;
+        return true;
     }
 
     // Load timer values before starting the timers
     if (start) {
-        initTimers();
+      if (!initTimers()) {
+        ELOG << "***** ERROR timersStartStop(), cannot init timers *****";
+        return false;
+      }
     }
         
     // Turn on Write Strobes
@@ -400,6 +403,9 @@ void p7142sd3c::timersStartStop(bool start) {
     // Turn off Write Strobes
     P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_OFF);
     usleep(p7142::P7142_IOCTLSLEEPUS);
+
+    return true;
+
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -580,6 +586,7 @@ p7142sd3c::initTimers() {
     int X, Y;
     double prt_ms, prt2_ms;
 
+    DLOG << "===================== initTimers =======================";
     if (_staggeredPrt == true) {
         // dual prt
         prt_ms = countsToTime(_prtCounts) * 1000;
@@ -599,6 +606,7 @@ p7142sd3c::initTimers() {
 
         char text[128];
 
+        DLOG << "Staggered periodCount: " << periodCount;
         DLOG << "Staggered, PrtScheme: " << PrtScheme;
         sprintf(text, "  prt_ms:    %.12f", prt_ms);
         DLOG << text;
@@ -618,9 +626,18 @@ p7142sd3c::initTimers() {
         periodCount = _prtCounts;
         PrtScheme = 0x0000;
 
-    }
+        DLOG << "Non-staggered periodCount is " << periodCount;
 
-    DLOG << "periodCount is " << periodCount;
+    }
+    DLOG << "========================================================";
+    
+    if (periodCount > 65535) {
+      ELOG << "********************** ERROR ****************************";
+      ELOG << "==>> initTimers() error, period count > 65536: " << periodCount;
+      ELOG << "     Cannot start timers";
+      ELOG << "*********************************************************";
+      return false;
+    }
 
     // Control Register
     P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);

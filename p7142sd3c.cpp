@@ -592,7 +592,7 @@ p7142sd3c::initTimers() {
         prt_ms = countsToTime(_prtCounts) * 1000;
         prt2_ms = countsToTime(_prt2Counts) * 1000;
         double prt_ratio = prt2_ms / prt_ms;
-        int rounded_ratio = (int) (prt_ratio + 0.5);
+        int rounded_ratio = (int) (prt_ratio);
         periodCount =
           timeToCounts(prt_ms * (prt_ratio - rounded_ratio) / rounded_ratio * 0.001);
 

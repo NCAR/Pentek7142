@@ -533,27 +533,27 @@ int p7142sd3cDn::filterSetup() {
             // Find the gaussian filter coefficient set corresponding to this filter width
             switch (fwidth_ms) {
 			case 500:
-				// 0.5 uS (75m gate)
+				// 0.5 uS (75m gate) (24 counts)
 				filterWidthUs = 0.5;
 	            gaussianFilterName = "ddc4_0_500";
 				break;
 			case 666:
-				// 0.667 uS (100m gate)
+				// 0.667 uS (100m gate) (32 counts)
 				filterWidthUs = 0.667;
 	            gaussianFilterName = "ddc4_0_667";
 				break;
 			case 1000:
-				// 1.0 uS (150m gate)
+				// 1.0 uS (150m gate) (48 counts)
 				filterWidthUs = 1.00;
 				gaussianFilterName = "ddc4_1_000";
 				break;
 			case 1333:
-				// 1.333 uS (200m gate)
+				// 1.333 uS (200m gate) (64 counts)
 				filterWidthUs = 1.333;
 				gaussianFilterName = "ddc4_1_333";
 				break;
 			case 2666:
-				// 2.667 uS (400m gate)
+				// 2.667 uS (400m gate) (128 counts)
 				filterWidthUs = 2.667;
 				gaussianFilterName = "ddc4_2_667";
 				break;

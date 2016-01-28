@@ -33,8 +33,9 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS,
     bool useFirstCard,
     bool rim,
-	int codeLength,
-    double adc_clock) :
+    int codeLength,
+    double adc_clock,
+    bool reset_clock_managers /* = true */) :
         p7142(simulate, simPauseMS, useFirstCard),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
@@ -221,16 +222,10 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     DLOG << "=============================";
 
-    // reset the FPGA clock managers. Necessary since some of our
-    // new DCMs in the firmware use the CLKFX output, which won't
-    // lock at startup.
-    _resetDCM();
+    if (reset_clock_managers) {
+      resetClockManagers();
+    }
 
-    // set free run mode as appropriate
-    loadFreeRun();
-
-    // stop the filters; to be started at the appropriate time by the user.
-    stopFilters();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -445,6 +440,28 @@ void p7142sd3c::stopFilters() {
     disableGateGen();
 
     DLOG << "fifos and filters disabled";
+}
+
+//////////////////////////////////////////////////////////////////////
+/// Reset the clock managers
+/// set free run mode
+/// and stop filters
+
+void p7142sd3c::resetClockManagers()
+
+{
+
+  // reset the FPGA clock managers. Necessary since some of our
+  // new DCMs in the firmware use the CLKFX output, which won't
+  // lock at startup.
+  resetDCM();
+  
+  // set free run mode as appropriate
+  loadFreeRun();
+  
+  // stop the filters; to be started at the appropriate time by the user.
+  stopFilters();
+  
 }
 
 //////////////////////////////////////////////////////////////////////

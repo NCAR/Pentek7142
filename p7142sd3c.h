@@ -81,6 +81,17 @@ public:
     /// @param adc_clock - if non-zero, override the default adc_clock 
     ///     from DDC Type. This parameter used to have a default of 0,
     ///     but a default is no longer defined.
+    /// @param reset_clock_managers:
+    ///     if true, do the following at the end of the constructor:
+    ///       Reset the clock managers
+    ///       set free run mode
+    ///       and stop filters
+    ///     This is the normal default situation.
+    ///     However, if you have more than 1 pentek card and need to sync
+    ///     the startup of the cards in time relative to each other,
+    ///     set this to false and then call resetClockManagers() from the
+    ///     client code just before starting the timers and the filters.
+    ///     As an example, this is done in DowDrx, in TimerManager.cpp.
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -97,7 +108,8 @@ public:
     		bool useFirstCard,
     		bool rim,
     		int codeLength,
-            double adc_clock
+                double adc_clock,
+                bool reset_clock_managers = true
     		);
     
     /// Destructor.
@@ -257,6 +269,11 @@ public:
     /// which will disable all of the fen generators at the same time.
     void stopFilters();
     
+    /// Reset the clock managers
+    /// set free run mode
+    /// and stop filters
+    void resetClockManagers();
+
     /// @brief Return the transmit pulse width, in seconds
     /// @return the transmit pulse width, in seconds
     double txPulseWidth() const;
@@ -534,7 +551,9 @@ protected:
     
     /// If _freerun is true, set the FREERUN bit in the
     /// transceiver control register. Otherwise clear it.
+public:
     void loadFreeRun();
+protected:
 
     /**
      * Simple class to hold integer delay and width for a timer.

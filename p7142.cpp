@@ -431,9 +431,10 @@ p7142::_addUpconverter(p7142Up * upconverter) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-void
-p7142::_resetDCM() {
+void p7142::resetDCM() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
+
+    DLOG << "Running resetDCM(), index: " << _cardIndex;
 
     if (isSimulating())
         return;

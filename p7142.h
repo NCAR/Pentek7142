@@ -252,13 +252,20 @@ namespace Pentek {
                 return(_upconverter);
             }
 
+            /// Reset the digital clock managers on the FPGA. Necessary since
+            /// some of the new DCMs we add in the firmware use the
+            /// CLKFX output, which won't lock at startup. <em>Downconverters
+            /// must call this method whenever they change their clock source
+            /// via the CLKSRCSET ioctl!</em>
+            void resetDCM();
+
             // We make our associated downconverter and upconverter classes 
             // friends so that they have access to BAR registers, etc.
             // methods, etc.
             friend class p7142Dn;
             friend class p7142Up;
 
-		protected:
+        protected:
             /// Add (or replace) a downconverter on our list. If the 
             /// downconverter is associated with a channel for which we already
             /// have a downconverter, the existing downconverter for that
@@ -281,12 +288,6 @@ namespace Pentek {
             /// @return The value in the selected register.
             unsigned int _regget(unsigned int addr);
 
-            /// Reset the digital clock managers on the FPGA. Necessary since
-            /// some of the new DCMs we add in the firmware use the
-            /// CLKFX output, which won't lock at startup. <em>Downconverters
-            /// must call this method whenever they change their clock source
-            /// via the CLKSRCSET ioctl!</em>
-            void _resetDCM();
             /// Initialize the ReadyFlow library.
             bool _initReadyFlow();
             /// Create a random number, with Gaussian distribution about a 

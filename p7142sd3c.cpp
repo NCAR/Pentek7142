@@ -439,7 +439,7 @@ void p7142sd3c::stopFilters() {
     // Disable all adc fifos by clearing the global gate enable
     disableGateGen();
 
-    DLOG << "fifos and filters disabled";
+    DLOG << "fifos and filters disabled, temp: " << temp;
 }
 
 //////////////////////////////////////////////////////////////////////

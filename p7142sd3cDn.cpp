@@ -260,6 +260,10 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             ramAddr = i / 8;
             ramSelect = (i % 8) << 4;
             break;
+        case p7142sd3c::DDC6DECIMATE:
+            ramAddr = i / 6;
+            ramSelect = (i % 6) << 4;
+            break;
         case p7142sd3c::DDC4DECIMATE:
             ramAddr = i / 4;
             ramSelect = (i % 4) << 4;
@@ -357,6 +361,10 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         case p7142sd3c::DDC8DECIMATE:
             ramAddr = i % 8;
             ramSelect = (i / 8) << 4;
+            break;    
+        case p7142sd3c::DDC6DECIMATE:
+            ramAddr = i % 12;
+            ramSelect = (i / 12) << 4;
             break;    
         case p7142sd3c::DDC4DECIMATE:
             ramAddr = i % 12;
@@ -1695,6 +1703,8 @@ p7142sd3cDn::ptMetadataLen() const {
         return(24); // 6 extra words (24 bytes) of metadata for DDC8
     case p7142sd3c::DDC10DECIMATE:
         return(24); // 6 extra words (24 bytes) of metadata for DDC10
+    case p7142sd3c::DDC6DECIMATE:
+        return(24); // 6 extra words (24 bytes) of metadata for DDC8
     default:
         return(0);
     }

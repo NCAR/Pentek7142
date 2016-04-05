@@ -82,6 +82,9 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         case DDC8DECIMATE:
           _adc_clock = 125.0e6;
           break;
+        case DDC6DECIMATE:
+          _adc_clock = 80.0e6;
+          break;
         case DDC4DECIMATE:
           _adc_clock = 48.0e6;
           break;
@@ -553,6 +556,9 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     case 3:
     	retval = BURST;
         break;     
+    case 7:
+    	retval = DDC6DECIMATE;
+        break;     
     }
     
     return retval;
@@ -815,6 +821,8 @@ std::string p7142sd3c::ddcTypeName(DDCDECIMATETYPE type) {
         return std::string("DDC4DECIMATE");
     case BURST:
         return std::string("BURST");
+    case DDC6DECIMATE:
+        return std::string("DDC6DECIMATE");
     default:
         return std::string("Unknown");
     }
@@ -834,6 +842,8 @@ uint16_t p7142sd3c::ddcDecimation() const
         return(10);
     case DDC8DECIMATE:
         return(8);
+    case DDC6DECIMATE:
+        return(6);
     case DDC4DECIMATE:
         return(4);
     case BURST:

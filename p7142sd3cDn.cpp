@@ -245,7 +245,9 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // program the kaiser coefficients
 
     bool kaiserFailed = false;
-    std::ostringstream stream;
+    std::ostringstream kstream;
+    int nKaiserReadbackFailures = 0;
+    DLOG << "kaiser filter size: " << kaiser.size();
     for (unsigned int i = 0; i < kaiser.size(); i++) {
 
         // Set up to write this coefficient
@@ -317,18 +319,25 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
                 break;
             } else {
                 if (attempt == 0) {
-                    stream.str().clear();
-                    stream << "kaiser[" << i << "] = " << std::hex <<
+                  if (nKaiserReadbackFailures == 0) {
+                    kstream.str().clear();
+                    kstream << "kaiser[" << i << "] = " << std::hex <<
                       kaiser[i] << ", readbacks: " << readBack <<
                       std::dec;
+                  }
+                  nKaiserReadbackFailures++;
                 } else {
-                    stream << ":" << std::hex << readBack << std::dec;
+                  if (nKaiserReadbackFailures == 0) {
+                    kstream << ":" << std::hex << readBack << std::dec;
+                  }
                 }
             }
         }
         if (! coeffLoaded) {
-            stream << " -- FAILED!";
-            DLOG << stream.str();
+          if (nKaiserReadbackFailures == 1) {
+            kstream << " -- FAILED!";
+            DLOG << kstream.str();
+          }
         }
         
         kaiserFailed |= !coeffLoaded;
@@ -348,6 +357,9 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // address register, which was done during the previous kaiser filter load.
 
     bool gaussianFailed = false;
+    std::ostringstream gstream;
+    int nGaussianReadbackFailures = 0;
+    DLOG << "gaussian filter size: " << gaussian.size();
     for (unsigned int i = 0; i < gaussian.size(); i++) {
 
         // Set up to write this coefficient
@@ -424,18 +436,25 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
                 break;
             } else {
                 if (attempt == 0) {
-                  stream.str().clear();
-                    stream << "gaussian[" << i << "] = " << std::hex <<
+                  if (nGaussianReadbackFailures == 0) {
+                    gstream.str().clear();
+                    gstream << "gaussian[" << i << "] = " << std::hex <<
                       gaussian[i] << ", readbacks: " << readBack <<
                       std::dec;
+                  }
+                  nGaussianReadbackFailures++;
                 } else {
-                    stream << ":" << std::hex << readBack << std::dec;
+                  if (nGaussianReadbackFailures == 0) {
+                    gstream << ":" << std::hex << readBack << std::dec;
+                  }
                 }
             }
         }
         if (! coeffLoaded) {
-          stream << " -- FAILED!";
-          DLOG << stream.str();
+          if (nGaussianReadbackFailures == 1) {
+            gstream << " -- FAILED!";
+            DLOG << gstream.str();
+          }
         }
         
         gaussianFailed |= !coeffLoaded;

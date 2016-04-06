@@ -68,6 +68,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 			_sd3cRev = 10007;
 		}
 		_ddcType = simulateDDCType;
+                _firmwareVersion = 0;
 	} else {
 		_sd3cRev = _unpackSd3cRev();
 		_ddcType = _unpackDdcType();
@@ -538,12 +539,30 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     unsigned int ddcTypeAndRev = _sd3cTypeAndRev();
 
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
-    // After that it's a 2-bit value in bits 14-15.
-    int ddcType = ((ddcTypeAndRev & 0x3fff) > 502) ?
-        (ddcTypeAndRev & 0xC000) >> 14 : (ddcTypeAndRev & 0x8000) >> 15;
-    
+    // After 502 it's a 2-bit value in bits 14-15.
+    // After 1120 it's a 3-bit value in bits 13-15.
+
+    int ddcTypeCode = 0;
+
+    if ((ddcTypeAndRev & 0x1fff) >= 1120) {
+      // later version, type in 3 bits
+      ddcTypeCode = (ddcTypeAndRev & 0xE000) >> 13;
+      _firmwareVersion = ddcTypeAndRev & 0x1fff;
+    } else if ((ddcTypeAndRev & 0x3fff) > 502) {
+      // intermediate version, type in 2 bits
+      ddcTypeCode = (ddcTypeAndRev & 0xC000) >> 14;
+      _firmwareVersion = ddcTypeAndRev & 0x3fff;
+    } else {
+      // early version, type in 1 bit
+      ddcTypeCode = (ddcTypeAndRev & 0x8000) >> 15;
+      _firmwareVersion = ddcTypeAndRev & 0x7fff;
+    }
+
+    DLOG << "Firmware version: " << _firmwareVersion;
+    DLOG << "DDC Type code: " << ddcTypeCode;
+
     DDCDECIMATETYPE retval = DDC4DECIMATE;
-    switch (ddcType) {
+    switch (ddcTypeCode) {
     case 0:
     	retval = DDC4DECIMATE;
         break;

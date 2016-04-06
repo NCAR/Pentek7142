@@ -33,6 +33,9 @@ public:
 	/// false otherwise.
 	bool ok();
 
+	/// @return The filter file path
+	std::string path();
+
 	/// @return The filter name
 	std::string name();
 

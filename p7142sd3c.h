@@ -238,6 +238,10 @@ public:
     /// @param data The value to be written.
     void TTLOut(unsigned short int data);
 
+    /// @brief Return the firmware version number
+    /// @return the firmware version number
+    int firmwareVersion() const { return _firmwareVersion; }
+
     /// @brief Return the DDC type instantiated in our card's firmware
     /// @return the DDC type instantiated in our card's firmware
     DDCDECIMATETYPE ddcType() const { return(_ddcType); }
@@ -625,6 +629,8 @@ protected:
     /// The number of pulses to sum for coherent integration by all non-burst
     /// downconverters.
     unsigned int _nsum;
+    /// Firmware version number
+    int _firmwareVersion;
     /// DDC type instantiated in our card's firmware
     DDCDECIMATETYPE _ddcType;
     /// DDC type to use when simulating (default DDC8DECIMATE).

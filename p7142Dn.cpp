@@ -67,6 +67,7 @@ p7142Dn::p7142Dn(
 
     // Set the clock source. This is pretty bogus, because currently the last downconverter
     // instantiated sets the clock source for all of them...
+    DLOG << "p7142Dn constructor, internal clock: " << internalClock;
     uint32_t clockSource = internalClock ?
             P7142_MSTR_CTRL_SEL_CLK_OSCILLATOR : P7142_MSTR_CTRL_SEL_CLK_EXT_CLK;
     P7142_SET_MSTR_BUS_CTRL_SEL_CLK(_p7142._p7142Regs.BAR2RegAddr.masterAControl, clockSource);

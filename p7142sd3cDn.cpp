@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <vector>
 
 #include <logx/Logging.h>
 LOGGING("p7142sd3cDn");
@@ -244,31 +245,30 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
 
     // program the kaiser coefficients
 
-    bool kaiserFailed = false;
-    std::ostringstream kstream;
-    int nKaiserReadbackFailures = 0;
-    DLOG << "kaiser filter size: " << kaiser.size();
-    for (unsigned int i = 0; i < kaiser.size(); i++) {
+    DLOG << "Loading kaiser filter: " << kaiser.name();
+
+    std::vector<unsigned int> kaiserReadBacks;
+    for (size_t ii = 0; ii < kaiser.size(); ii++) {
 
         // Set up to write this coefficient
         int ramAddr = 0;
         int ramSelect = 0;
         switch (_sd3c.ddcType()) {
         case p7142sd3c::DDC10DECIMATE:
-            ramAddr = i / 10;
-            ramSelect = (i % 10) << 4;
+            ramAddr = ii / 10;
+            ramSelect = (ii % 10) << 4;
             break;
         case p7142sd3c::DDC8DECIMATE:
-            ramAddr = i / 8;
-            ramSelect = (i % 8) << 4;
+            ramAddr = ii / 8;
+            ramSelect = (ii % 8) << 4;
             break;
         case p7142sd3c::DDC6DECIMATE:
-            ramAddr = i / 6;
-            ramSelect = (i % 6) << 4;
+            ramAddr = ii / 6;
+            ramSelect = (ii % 6) << 4;
             break;
         case p7142sd3c::DDC4DECIMATE:
-            ramAddr = i / 4;
-            ramSelect = (i % 4) << 4;
+            ramAddr = ii / 4;
+            ramSelect = (ii % 4) << 4;
             break;
         case p7142sd3c::BURST:   // Burst mode uses no filters
             break;    
@@ -280,17 +280,19 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
 
         // Try up to a few times to program this filter coefficient and
         // read it back successfully.
-        bool coeffLoaded = false;
-        for (int attempt = 0; attempt < 5; attempt++) {
+
+        unsigned int kaiserReadBack = 0;
+        for (int iattempt = 0; iattempt < 5; iattempt++) {
+
             // write the value
             // LS word first
-            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_DATA_LSW, kaiser[i] & 0xFFFF);
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_DATA_LSW, kaiser[ii] & 0xFFFF);
             usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
             P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_DATA_MSW,
-                    (kaiser[i] >> 16) & 0x3);
+                    (kaiser[ii] >> 16) & 0x3);
             usleep(1);
     
             // latch coefficient
@@ -303,88 +305,84 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     
             // read back the programmed value; we need to do this in two words 
             // as above.
-            unsigned int readBack;
             uint32_t kaiser_lsw;
             uint32_t kaiser_msw;
             P7142_REG_READ(_sd3c._BAR2Base + KAISER_READ_LSW, kaiser_lsw);
             P7142_REG_READ(_sd3c._BAR2Base + KAISER_READ_MSW, kaiser_msw);
-            readBack = kaiser_msw << 16 | kaiser_lsw;
-
-            if (readBack == kaiser[i]) {
-                coeffLoaded = true;
-                if (attempt != 0) {
-                    DLOG << ":" << std::hex << readBack << std::dec <<
-                            " -- OK";
-                }
-                break;
-            } else {
-                if (attempt == 0) {
-                  if (nKaiserReadbackFailures == 0) {
-                    kstream.str().clear();
-                    kstream << "kaiser[" << i << "] = " << std::hex <<
-                      kaiser[i] << ", readbacks: " << readBack <<
-                      std::dec;
-                  }
-                  nKaiserReadbackFailures++;
-                } else {
-                  if (nKaiserReadbackFailures == 0) {
-                    kstream << ":" << std::hex << readBack << std::dec;
-                  }
-                }
+            kaiserReadBack = kaiser_msw << 16 | kaiser_lsw;
+            
+            if (kaiserReadBack == kaiser[ii]) {
+              break;
             }
-        }
-        if (! coeffLoaded) {
-          if (nKaiserReadbackFailures == 1) {
-            kstream << " -- FAILED!";
-            DLOG << kstream.str();
-          }
-        }
+            
+        } // iattempt
         
-        kaiserFailed |= !coeffLoaded;
+        kaiserReadBacks.push_back(kaiserReadBack);
+
+    } // ii
+
+    // check for failure in loading kaiser
+    
+    bool kaiserFailed = false;
+    for (size_t ii = 0; ii < kaiserReadBacks.size(); ii++) {
+      if (kaiserReadBacks[ii] != kaiser[ii]) {
+        kaiserFailed = true;
+        break;
+      }
     }
 
-    if (!kaiserFailed) {
-      DLOG << kaiser.size()
-           << " Kaiser filter coefficients successfully loaded: "
-           << kaiser.name();
+    if (kaiserFailed) {
+      ELOG << "ERROR - p7142sd3cDn::loadFilters()";
+      ELOG << "FAILED to load and readback Kaiser filter";
+      ELOG << "  path: " << kaiser.path();
+      ELOG << "  name: " << kaiser.name();
+      ELOG << "  size: " << kaiser.size();
+      ELOG << "  isSymmetric: " << kaiser.isSymmetric();
+      for (size_t ii = 0; ii < kaiserReadBacks.size(); ii++) {
+        char msg[1024];
+        sprintf(msg, "    index, val, readback: %3d %10d %10d",
+                (int) ii, (int) kaiser[ii], (int) kaiserReadBacks[ii]);
+        DLOG << msg;
+      } // ii
     } else {
-      DLOG << "Unable to load the Kaiser filter coefficients";
-      DLOG << kaiser.toStr();
+      DLOG << "SUCCESS loading kaiser filter - p7142sd3cDn::loadFilters()";
+      DLOG << "  name: " << kaiser.name();
+      DLOG << "  size: " << kaiser.size();
     }
 
     // program the gaussian coefficients
-    // Note that the DDC select is accomplished in the kaiser filter coefficient
+    // Note that the DDC select is accomplished in the filter coefficient
     // address register, which was done during the previous kaiser filter load.
 
-    bool gaussianFailed = false;
-    std::ostringstream gstream;
-    int nGaussianReadbackFailures = 0;
-    DLOG << "gaussian filter size: " << gaussian.size();
-    for (unsigned int i = 0; i < gaussian.size(); i++) {
+    DLOG << "Loading gaussian filter: " << gaussian.name();
+
+    std::vector<unsigned int> gaussianReadBacks;
+    for (size_t ii = 0; ii < gaussian.size(); ii++) {
 
         // Set up to write this coefficient
         int ramAddr = 0;
         int ramSelect = 0;
         switch (_sd3c.ddcType()) {
         case p7142sd3c::DDC10DECIMATE:
-            ramAddr = i % 10;
-            ramSelect = (i / 10) << 4;
+            ramAddr = ii % 10;
+            ramSelect = (ii / 10) << 4;
             break;
         case p7142sd3c::DDC8DECIMATE:
-            ramAddr = i % 8;
-            ramSelect = (i / 8) << 4;
+            ramAddr = ii % 8;
+            ramSelect = (ii / 8) << 4;
             break;    
         case p7142sd3c::DDC6DECIMATE:
-            ramAddr = i % 12;
-            ramSelect = (i / 12) << 4;
+            ramAddr = ii % 12;
+            ramSelect = (ii / 12) << 4;
             break;    
         case p7142sd3c::DDC4DECIMATE:
-            ramAddr = i % 12;
-            ramSelect = (i / 12) << 4;
+            ramAddr = ii % 12;
+            ramSelect = (ii / 12) << 4;
             break;
         case p7142sd3c::BURST:   // Burst mode uses no filters
             break;    
         }
+
         /// @todo early versions of the gaussian filter programming required
         /// the ds select bits to be set in the gaussian address register.
         /// We can take this out when we get a working bitstream with this
@@ -392,8 +390,9 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
 
         // Try up to a few times to program this filter coefficient and
         // read it back successfully.
-        bool coeffLoaded = false;
-        for (int attempt = 0; attempt < 5; attempt++) {
+        unsigned int gaussianReadBack = 0;
+        for (int iattempt = 0; iattempt < 5; iattempt++) {
+
             // set the address
             P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_ADDR,
                     ddcSelect | ramSelect | ramAddr);
@@ -402,13 +401,13 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             // write the value
             // LS word first
             P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_DATA_LSW,
-                    gaussian[i] & 0xFFFF);
+                    gaussian[ii] & 0xFFFF);
             usleep(1);
     
             // then the MS word -- since coefficients are 18 bits and FPGA 
             // registers are 16 bits!
             P7142_REG_WRITE(_sd3c._BAR2Base + GAUSSIAN_DATA_MSW,
-                    (gaussian[i] >> 16) & 0x3);
+                    (gaussian[ii] >> 16) & 0x3);
             usleep(1);
     
             // latch coefficient
@@ -421,56 +420,50 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     
             // read back the programmed value; we need to do this in two words 
             // as above.
-            unsigned int readBack;
-            uint32_t kaiser_lsw;
-            uint32_t kaiser_msw;
-            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_LSW, kaiser_lsw);
-            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_MSW, kaiser_msw);
-            readBack = kaiser_msw << 16 | kaiser_lsw;
-            if (readBack == gaussian[i]) {
-                coeffLoaded = true;
-                if (attempt != 0) {
-                    DLOG << ":" << std::hex << readBack << std::dec <<
-                            " -- OK";
-                }
-                break;
-            } else {
-                if (attempt == 0) {
-                  if (nGaussianReadbackFailures == 0) {
-                    gstream.str().clear();
-                    gstream << "gaussian[" << i << "] = " << std::hex <<
-                      gaussian[i] << ", readbacks: " << readBack <<
-                      std::dec;
-                  }
-                  nGaussianReadbackFailures++;
-                } else {
-                  if (nGaussianReadbackFailures == 0) {
-                    gstream << ":" << std::hex << readBack << std::dec;
-                  }
-                }
+            uint32_t gaussian_lsw;
+            uint32_t gaussian_msw;
+            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_LSW, gaussian_lsw);
+            P7142_REG_READ(_sd3c._BAR2Base + GAUSSIAN_READ_MSW, gaussian_msw);
+            gaussianReadBack = gaussian_msw << 16 | gaussian_lsw;
+
+            if (gaussianReadBack == gaussian[ii]) {
+              break;
             }
-        }
-        if (! coeffLoaded) {
-          if (nGaussianReadbackFailures == 1) {
-            gstream << " -- FAILED!";
-            DLOG << gstream.str();
-          }
-        }
+
+        } // iattempt
+
+        gaussianReadBacks.push_back(gaussianReadBack);
         
-        gaussianFailed |= !coeffLoaded;
+    } // ii
+
+    // check for failure in loading gaussian
+    
+    bool gaussianFailed = false;
+    for (size_t ii = 0; ii < gaussianReadBacks.size(); ii++) {
+      if (gaussianReadBacks[ii] != gaussian[ii]) {
+        gaussianFailed = true;
+        break;
+      }
     }
 
-    if (!gaussianFailed) {
-      DLOG << gaussian.size()
-           << " Gaussian filter coefficients successfully loaded: "
-           << gaussian.name();
+    if (gaussianFailed) {
+      ELOG << "ERROR - p7142sd3cDn::loadFilters()";
+      ELOG << "FAILED to load and readback Gaussian filter";
+      ELOG << "  path: " << gaussian.path();
+      ELOG << "  name: " << gaussian.name();
+      ELOG << "  size: " << gaussian.size();
+      ELOG << "  isSymmetric: " << gaussian.isSymmetric();
+      for (size_t ii = 0; ii < gaussianReadBacks.size(); ii++) {
+        char msg[1024];
+        sprintf(msg, "    index, val, readback: %3d %10d %10d",
+                (int) ii, (int) gaussian[ii], (int) gaussianReadBacks[ii]);
+        DLOG << msg;
+      } // ii
     } else {
-      DLOG << "Unable to load the Gaussian filter coefficients";
-      DLOG << gaussian.toStr();
+      DLOG << "SUCCESS loading gaussian filter - p7142sd3cDn::loadFilters()";
+      DLOG << "  name: " << gaussian.name();
+      DLOG << "  size: " << gaussian.size();
     }
-
-    // return to decimal output
-    DLOG << std::dec;
 
     return !kaiserFailed && !gaussianFailed;
 

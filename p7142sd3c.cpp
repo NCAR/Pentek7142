@@ -184,12 +184,12 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     // Sync pulse timer. Note that the width of this timer must be at least
     // 140 ns to be recognized to be counted by the Acromag PMC730 Multi-IO
     // card pulse counter, and this counter is used by the Ka-band radar!
-    setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9));
+    setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9), true);
     
     // tx pulse timer
     int txDelayCounts = timeToCounts(tx_delay);
     int pulseWidthCounts = timeToCounts(tx_pulsewidth);
-    setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts);
+    setTimer(TX_PULSE_TIMER, txDelayCounts, pulseWidthCounts, true);
 
     // log startup params in debug mode
 

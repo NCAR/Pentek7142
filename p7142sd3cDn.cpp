@@ -274,15 +274,15 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             break;    
         }
         
-        P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_ADDR,
-                ddcSelect | DDC_STOP | ramSelect | ramAddr);
-        usleep(1);
-
         // Try up to a few times to program this filter coefficient and
         // read it back successfully.
 
         unsigned int kaiserReadBack = 0;
         for (int iattempt = 0; iattempt < 5; iattempt++) {
+
+            P7142_REG_WRITE(_sd3c._BAR2Base + KAISER_ADDR,
+                            ddcSelect | DDC_STOP | ramSelect | ramAddr);
+            usleep(1);
 
             // write the value
             // LS word first
@@ -342,12 +342,11 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
         char msg[1024];
         sprintf(msg, "    index, val, readback: %3d %10d %10d",
                 (int) ii, (int) kaiser[ii], (int) kaiserReadBacks[ii]);
-        DLOG << msg;
+        ELOG << msg;
       } // ii
     } else {
       DLOG << "SUCCESS loading kaiser filter - p7142sd3cDn::loadFilters()";
-      DLOG << "  name: " << kaiser.name();
-      DLOG << "  size: " << kaiser.size();
+      DLOG << kaiser.toStr();
     }
 
     // program the gaussian coefficients
@@ -355,6 +354,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
     // address register, which was done during the previous kaiser filter load.
 
     DLOG << "Loading gaussian filter: " << gaussian.name();
+    DLOG << "        gaussian.size(): " << gaussian.size();
 
     std::vector<unsigned int> gaussianReadBacks;
     for (size_t ii = 0; ii < gaussian.size(); ii++) {
@@ -461,8 +461,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
       } // ii
     } else {
       DLOG << "SUCCESS loading gaussian filter - p7142sd3cDn::loadFilters()";
-      DLOG << "  name: " << gaussian.name();
-      DLOG << "  size: " << gaussian.size();
+      DLOG << gaussian.toStr();
     }
 
     return !kaiserFailed && !gaussianFailed;

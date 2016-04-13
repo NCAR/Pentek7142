@@ -117,6 +117,9 @@ public:
     /// @param simWaveLength The wavelength of the simulated data, in sample counts
     /// @param internalClock Set true if the internal clock should be
     ///     used instead of an external clock source.
+    /// @param abortOnError Set false if you want the constructor to exit on error
+    ///                     Set true if you want the constructor to return on error
+    ///                     after setting _constructorOk to false
     p7142sd3cDn(
         p7142sd3c * p7142sd3cPtr, 
         int chanId,
@@ -128,7 +131,8 @@ public:
         std::string gaussianFile, 
         std::string kaiserFile,
         int simWaveLength = 5000,
-        bool internalClock = false);
+        bool internalClock = false,
+        bool abortOnError = true);
     
     /// Destructor
     virtual ~p7142sd3cDn();

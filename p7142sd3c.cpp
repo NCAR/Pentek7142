@@ -35,8 +35,11 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     bool rim,
     int codeLength,
     double adc_clock,
-    bool reset_clock_managers /* = true */) :
+    bool reset_clock_managers /* = true */,
+    bool abortOnError /* = true */) :
         p7142(simulate, simPauseMS, useFirstCard),
+        _abortOnError(abortOnError),
+        _constructorOk(true),
         _staggeredPrt(staggeredPrt),
         _freeRun(freeRun),
         _prt(prt),
@@ -57,7 +60,11 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     if (_nsum < 1) {
         std::cerr << "Selected nsum of " << _nsum << " makes no sense!" <<
                 std::endl;
-        abort();
+        if (_abortOnError) {
+          abort();
+        }
+        _constructorOk = false;
+        return;
     }
 
     // Get the firmware revison and ddc type from the FPGA.
@@ -140,7 +147,10 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
                 " has Pentek PCI FPGA code dated " <<
                 std::hex << revDate << std::dec <<
                 ", but 20071130 or later is required.";
-            abort();
+            if (abortOnError) {
+              abort();
+            }
+            _constructorOk = false;
             return;
         }
     }
@@ -250,22 +260,30 @@ p7142sd3c::addDownconverter(int chanId, uint32_t dmaDescSize,
       ELOG << "ERROR in addDownconverter";
       ELOG << "  Requested DMA buffer size too large: " << dmaDescSize;
       ELOG << "  Max allowable size 4 MBytes: " << maxDmaSize;
-      abort();
+      if (_abortOnError) {
+        abort();
+      }
+      return NULL;
     }
 
     // Create a new p7142sd3cDn downconverter and put it in our list
-    p7142sd3cDn* downconverter = new p7142sd3cDn(
-    		this,
-			chanId,
-			dmaDescSize,
-			burstSampling,
-			tsLength,
-			rx_delay,
-			rx_pulse_width,
-			gaussianFile,
-			kaiserFile,
-			simWavelength,
-			internalClock);
+    p7142sd3cDn* downconverter =
+      new p7142sd3cDn(this,
+                      chanId,
+                      dmaDescSize,
+                      burstSampling,
+                      tsLength,
+                      rx_delay,
+                      rx_pulse_width,
+                      gaussianFile,
+                      kaiserFile,
+                      simWavelength,
+                      internalClock,
+                      _abortOnError);
+
+    if (!downconverter->constructorOk()) {
+      return NULL;
+    }
 
     p7142::_addDownconverter(downconverter);
 

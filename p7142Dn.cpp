@@ -23,8 +23,11 @@ p7142Dn::p7142Dn(
         int bypassdivrate,
         int simWaveLength,
         bool sim4bytes,
-        bool internalClock) :
+        bool internalClock /* = false */,
+        bool abortOnError /* = true */) :
   _p7142(*p7142),
+  _abortOnError(abortOnError),
+  _constructorOk(true),
   _chanId(chanId),
   _DmaDescSize(dmaDescSize),
   _bytesRead(0),
@@ -40,7 +43,11 @@ p7142Dn::p7142Dn(
     if ((_DmaDescSize % 4) || (_DmaDescSize <= 0)) {
       ELOG << "DMA descriptor size must be a positive  multiple of 4 bytes, "
            <<  _DmaDescSize << " was specified";
-      abort();
+      if (_abortOnError) {
+        abort();
+      }
+      _constructorOk = false;
+      return;
     }
 
     boost::recursive_mutex::scoped_lock guard(_mutex);
@@ -60,7 +67,13 @@ p7142Dn::p7142Dn(
     _readBuf.resize(2 * _DmaDescSize);
 
     // Set up the fifo and DMA
-    _initFifoAndDma();
+    if (_initFifoAndDma()) {
+      if (_abortOnError) {
+        abort();
+      }
+      _constructorOk = false;
+      return;
+    }
     
     // Start DMA
     _start();
@@ -105,7 +118,7 @@ p7142Dn::read(char* buf, int bufsize) {
     if ((bufsize % 4) != 0) {
       ELOG << __PRETTY_FUNCTION__ << ": " << bufsize << 
         " bytes requested, but Pentek reads must be a multiple of 4 bytes!";
-      abort();
+      abort(); // hard abort - equivalent of assert()
     }
 
     int n = isSimulating() ? _simulatedRead(buf, bufsize) : _read(buf, bufsize);
@@ -211,7 +224,12 @@ p7142Dn::setBypassDivider(int bypassdiv) const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-void
+/// The fifos will be configured to be gated by a gate signal,
+/// which should be the global gate coming from the gate generator
+/// register. That signal is controlled by p7142::disableGateGen()
+/// and p7142::enableGateGen().
+/// Returns 0 on success, -1 on failure
+int
 p7142Dn::_initFifoAndDma() {
 
     ////////////////////////// Fifo setup ///////////////////////////////
@@ -242,7 +260,7 @@ p7142Dn::_initFifoAndDma() {
     if (status != PTK714X_STATUS_OK) {
         ELOG << __PRETTY_FUNCTION__ << ": Unable to open DMA channel " << 
           _chanId;
-        abort();
+        return -1;
     }
 
     // Allocate DMA buffers, one per channel/descriptor pair.
@@ -253,7 +271,7 @@ p7142Dn::_initFifoAndDma() {
             ELOG << __PRETTY_FUNCTION__ << 
             ": Unable to allocate a DMA buffer for channel " << _chanId << 
             "/descriptor " << d;
-            abort();
+            return -1;
         }
     }
 
@@ -306,6 +324,8 @@ p7142Dn::_initFifoAndDma() {
         ELOG << "Error " << status << 
           " initializing DMA registers for channel " << _chanId;
     }
+
+    return 0;
 
 }
 

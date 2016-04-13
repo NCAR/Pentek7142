@@ -22,14 +22,17 @@ namespace Pentek {
 p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId, 
         uint32_t dmaDescSize, bool isBurst, int tsLength, double rx_delay,
         double rx_pulsewidth, std::string gaussianFile, std::string kaiserFile,
-        int simWaveLength, bool internalClock) :
+        int simWaveLength,
+        bool internalClock /* = false */,
+        bool abortOnError /* = true */) :
         p7142Dn(p7142sd3cPtr, 
                 chanId, 
                 dmaDescSize,
                 1, 
                 simWaveLength,
                 p7142sd3cPtr->nsum() > 1,
-                internalClock),
+                internalClock,
+                abortOnError),
         _sd3c(*p7142sd3cPtr),
         _isBurst(isBurst),
         _tsLength(tsLength),
@@ -79,7 +82,10 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         "non-zero multiple of " <<
         1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
         " ns for " << _sd3c.ddcTypeName();
-      abort();
+      if (abortOnError) {
+        abort();
+      }
+      _constructorOk = false;
     }
     
     // PRT must be a multiple of the pulse width and longer than
@@ -102,7 +108,10 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         ELOG << "rx pulse width: " << rx_pulsewidth;
         ELOG << "PRT must be greater than (gates+1)*(rx pulse width)";
         ELOG << "Min valid PRT: " << ((_sd3c.gates()+1) * rx_pulsewidth);
-        abort();
+        if (!abortOnError) {
+          abort();
+        }
+        _constructorOk = false;
       }
     }
 
@@ -149,14 +158,18 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     }
 
     if (_dataInterruptPeriod > 5.0) {
-        abort();
+        if (!abortOnError) {
+          abort();
+        }
+        _constructorOk = false;
     }
     
     // initialize the buffering scheme.
     initBuffer();
 
-    if (isSimulating())
+    if (isSimulating()) {
         return;
+    }
 
     // Set the bypass divider (decimation) for our receiver channel
     // ** This establishes the gate width in the downconverter. **
@@ -164,13 +177,20 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
             setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
     if (!bypassOk) {
         ELOG << "Failed to set decimation for channel " << _chanId;
-        abort();
+        if (!abortOnError) {
+          abort();
+        }
+        _constructorOk = false;
     }
     DLOG << "bypass decim: " << bypassDivider();
     
     // configure DDC in FPGA
     if (!config()) {
-        DLOG << "error initializing filters";
+      DLOG << "error initializing filters";
+      if (!abortOnError) {
+        abort();
+      }
+      _constructorOk = false;
     }
 
 }
@@ -228,7 +248,8 @@ bool p7142sd3cDn::config() {
     // the filter file paths is empty or if this is a burst channel
     bool filterError = filterSetup();
     if (filterError) {
-        return false;
+      DLOG << "p7142sd3cDn::config() filterSetup() failed";
+      return false;
     }
 
     return true;
@@ -581,7 +602,7 @@ int p7142sd3cDn::filterSetup() {
 					  << _sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)/_sd3c.codeLength()
 					  << " (" << _sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER))/_sd3c.codeLength()
 					  << "s) is not recognized\n";
-				exit(1);
+				return -1;
 			break;
             }
             if (_sd3c.codeLength() > 1) {
@@ -601,7 +622,7 @@ int p7142sd3cDn::filterSetup() {
         default: {
             ELOG << "DDC type " << ddcTypeName() << 
                 " not handled in " << __FUNCTION__;
-            abort();
+            return -1;
             break;
         }
         }
@@ -610,7 +631,7 @@ int p7142sd3cDn::filterSetup() {
             ELOG << "No entry for " << gaussianFilterName << ", "
                     << pulsewidthUs
                  << " us pulsewidth in the list of builtin Gaussian filters!";
-            abort();
+            return -1;
         }
         gaussian = FilterSpec(builtins[gaussianFilterName]);
         DLOG << "Using gaussian filter coefficient set "
@@ -648,14 +669,14 @@ int p7142sd3cDn::filterSetup() {
         default: {
             ELOG << "DDC type " << ddcTypeName() << 
                 " not handled in " << __FUNCTION__;
-            abort();
+            return -1;
             break;
         }
         }
         if (builtins.find(kaiserFilterName) == builtins.end()) {
             ELOG << "No entry for " << kaiserFilterName
                     << " in the list of builtin Kaiser filters!";
-            abort();
+            return -1;
         }
         kaiser = FilterSpec(builtins[kaiserFilterName]);
         DLOG << "Using kaiser filter coefficient set " << kaiserFilterName;
@@ -664,12 +685,12 @@ int p7142sd3cDn::filterSetup() {
     // load the filter coefficients
 
     if (!loadFilters(gaussian, kaiser)) {
-        ELOG << "Unable to load filters\n";
-        if (! usingInternalClock()) {
-            ELOG << "Is the external clock source connected?";
-            ELOG << "Is the clock signal strength at least +3 dBm?";
-        }
-        exit(1);
+      ELOG << "Unable to load filters";
+      if (! usingInternalClock()) {
+        ELOG << "Is the external clock source connected?";
+        ELOG << "Is the clock signal strength at least +3 dBm?";
+      }
+      return -1;
     }
 
     return 0;

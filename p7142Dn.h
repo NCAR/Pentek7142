@@ -26,16 +26,25 @@ public:
     /// in simulation mode. This simulates the output of the coherent integrator.
     /// @param internalClock Set true if the internal clock should be
     /// used instead of an external clock source.
+    /// @param abortOnError Set true if you want the constructor to abort on error
+    ///                     Set false if you want the constructor to return on error
+    ///                     after setting _constructorOk to false
     p7142Dn(p7142* p7142,
             int chanId,
             uint32_t dmaDescSize,
             int bypassdivrate = 1,
             int simWaveLength = 5000,
             bool sim4bytes = false,
-            bool internalClock = false);
+            bool internalClock = false,
+            bool abortOnError = true);
 
         /// Destructor
         virtual ~p7142Dn();
+
+        /// @return True if the constructor was successful, false otherwise.
+        /// Applies if abortOnError is false.
+        virtual bool constructorOk() const { return _constructorOk; }
+
         /// Read bytes.
         /// @param buf read bytes into this buffer
         /// @param bufsize The number of bytes to read.
@@ -109,7 +118,8 @@ public:
         /// which should be the global gate coming from the gate generator
         /// register. That signal is controlled by p7142::disableGateGen()
         /// and p7142::enableGateGen().
-        void _initFifoAndDma();
+        /// Returns 0 on success, -1 on failure
+        int _initFifoAndDma();
 
         /// @brief Read bytes from the ADC channel. If no data are
         /// available, the thread will be blocked. The request will not
@@ -120,6 +130,7 @@ public:
         /// @return The number of bytes read. If an error occurs, minus
         /// one will be returned.
         int _read(char* buf, int bytes);
+
         /// @brief The _simulatedRead() mimics _read(), but returns simulated
         /// data rather than data actually obtained from the Pentek card.
         /// A noisy sine wave with wavelength of _simWaveLength gates will be 
@@ -130,8 +141,14 @@ public:
         /// @return The number of bytes "read". If an error occurs, minus
         /// one will be returned.
         virtual int _simulatedRead(char* buf, int bytes);
+
         /// The P7142 which owns us...
         p7142& _p7142;
+
+        /// handling error behavior
+        bool _abortOnError;  ///< set true if we abort on error rather than return
+        bool _constructorOk; ///< true if the constructor was successful, false otherwise
+
         /// Receiver channel number (0-3)
         int _chanId;
         /// The number bytes in each DMA descriptor. This is the data interval

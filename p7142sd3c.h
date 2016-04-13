@@ -92,6 +92,10 @@ public:
     ///     set this to false and then call resetClockManagers() from the
     ///     client code just before starting the timers and the filters.
     ///     As an example, this is done in DowDrx, in TimerManager.cpp.
+    /// @param abortOnError
+    ///     Set true if you want the constructor to abort on error
+    ///     Set false if you want the constructor to return on error
+    ///     after setting _constructorOk to false
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -109,12 +113,17 @@ public:
     		bool rim,
     		int codeLength,
                 double adc_clock,
-                bool reset_clock_managers = true
+                bool reset_clock_managers = true,
+                bool abortOnError = true
     		);
     
     /// Destructor.
     virtual ~p7142sd3c();
     
+    /// @return True if the constructor was successful, false otherwise.
+    /// Applies if abortOnError is true.
+    virtual bool constructorOk() const { return _constructorOk; }
+
     /// @brief Construct and add a downconverter for one of our receiver channels.
     /// @param chanId The channel identifier (0-3)
     /// @param dmaDescSize Size of a DMA descriptor. This is the spacing, in
@@ -137,6 +146,7 @@ public:
     ///     counts
     /// @param internalClock Set to true if the Pentek card's internal clock
     ///     should be used
+    /// return NULL on error
     virtual p7142sd3cDn * addDownconverter(
             int chanId, 
             uint32_t dmaDescSize,
@@ -596,6 +606,10 @@ protected:
     /// @brief Unpack the SD3C firmware revision number.
     /// @return the unpacked sd3c firmware revision number.
     int _unpackSd3cRev();
+
+    /// handling error behavior
+    bool _abortOnError;  ///< set true if we abort on error rather than return
+    bool _constructorOk; ///< true if the constructor was successful, false otherwise
 
     /// Pointer to the sd3c transceiver control register in the fpga.
     uint32_t* tcvrCtrlReg;

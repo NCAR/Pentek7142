@@ -56,6 +56,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
 
     DLOG << "+++++++++++++++++++++++++++++";
     DLOG << "p7142sd3cDn constructor";
+    DLOG << "  abortOnError: " << _abortOnError;
     DLOG << "  cardIndex: " << _p7142.getCardIndex();
     DLOG << "  chanId: " << chanId;
     DLOG << "  isBurst: " << isBurst;
@@ -82,7 +83,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         "non-zero multiple of " <<
         1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
         " ns for " << _sd3c.ddcTypeName();
-      if (abortOnError) {
+      if (_abortOnError) {
         abort();
       }
       _constructorOk = false;
@@ -95,7 +96,10 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         ELOG << "Rx pulse width must divide into PRT";
         ELOG << "rxPulsewidthCounts, prtCounts: "
              << rxPulsewidthCounts << ", " << _sd3c.prtCounts();
-        abort();
+        if (_abortOnError) {
+          abort();
+        }
+        _constructorOk = false;
       }
       if (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts)) {
         ELOG << "PRT ERROR";
@@ -108,7 +112,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         ELOG << "rx pulse width: " << rx_pulsewidth;
         ELOG << "PRT must be greater than (gates+1)*(rx pulse width)";
         ELOG << "Min valid PRT: " << ((_sd3c.gates()+1) * rx_pulsewidth);
-        if (!abortOnError) {
+        if (_abortOnError) {
           abort();
         }
         _constructorOk = false;
@@ -158,7 +162,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     }
 
     if (_dataInterruptPeriod > 5.0) {
-        if (!abortOnError) {
+        if (_abortOnError) {
           abort();
         }
         _constructorOk = false;
@@ -177,7 +181,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
             setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
     if (!bypassOk) {
         ELOG << "Failed to set decimation for channel " << _chanId;
-        if (!abortOnError) {
+        if (_abortOnError) {
           abort();
         }
         _constructorOk = false;
@@ -187,7 +191,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // configure DDC in FPGA
     if (!config()) {
       DLOG << "error initializing filters";
-      if (!abortOnError) {
+      if (_abortOnError) {
         abort();
       }
       _constructorOk = false;

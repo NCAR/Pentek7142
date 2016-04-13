@@ -206,6 +206,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "=============================";
 
     DLOG << "p7142sd3c constructor";
+    DLOG << "  abortOnError: " << (_abortOnError? "Y":"N");
     DLOG << "  downconverter: " << ddcTypeName(_ddcType);
     DLOG << "  simulate: " << simulate;
     DLOG << "  tx_delay: " << tx_delay;

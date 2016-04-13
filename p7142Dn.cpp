@@ -39,6 +39,7 @@ p7142Dn::p7142Dn(
   _readBufAvail(0),
   _readBufOut(0)
 {
+
     // dma buffer size must be a multiple of 4
     if ((_DmaDescSize % 4) || (_DmaDescSize <= 0)) {
       ELOG << "DMA descriptor size must be a positive  multiple of 4 bytes, "

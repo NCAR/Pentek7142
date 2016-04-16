@@ -46,6 +46,9 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
         _firstBeam(true),
         _dataInterruptPeriod(0.0)
 {
+
+    _constructorOk = true;
+
     boost::recursive_mutex::scoped_lock guard(_mutex);
     
     // Get gate count and coherent integration sum count from our card
@@ -371,7 +374,6 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
       } // ii
     } else {
       DLOG << "SUCCESS loading kaiser filter - p7142sd3cDn::loadFilters()";
-      DLOG << kaiser.toStr();
     }
 
     // program the gaussian coefficients
@@ -486,7 +488,6 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
       } // ii
     } else {
       DLOG << "SUCCESS loading gaussian filter - p7142sd3cDn::loadFilters()";
-      DLOG << gaussian.toStr();
     }
 
     return !kaiserFailed && !gaussianFailed;

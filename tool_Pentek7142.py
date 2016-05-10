@@ -45,7 +45,7 @@ DDCregisters.h
 SingleMutex.h
 """)
 
-libpentek7142 = env.Library('pentek7142', libsources)
+libpentek7142 = env.Library('Pentek7142', libsources)
 Default(libpentek7142)
 
 env['DOXYFILE_DICT'].update({'PROJECT_NAME':'Pentek'})
@@ -53,12 +53,12 @@ html = env.Apidocs(libsources + headers)
 Default(html)
 
 thisdir = env.Dir('.').srcnode().abspath
-def pentek7142(env):
+def Pentek7142(env):
     env.AppendUnique(CPPPATH   =[thisdir,])
-    env.AppendLibrary('pentek7142')
-    env.AppendDoxref('pentek7142')
+    env.AppendLibrary('Pentek7142')
+    env.AppendDoxref('Pentek7142')
     env.Require(tools)
 
-Export('pentek7142')
+Export('Pentek7142')
 
 SConscript("test/SConscript")

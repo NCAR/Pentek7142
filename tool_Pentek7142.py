@@ -10,6 +10,7 @@ variables = eol_scons.GlobalVariables()
 
 tools = Split("""
 boost_thread
+logx
 ReadyFlow7142_428
 doxygen
 """)
@@ -45,16 +46,16 @@ DDCregisters.h
 SingleMutex.h
 """)
 
-libpentek7142 = env.Library('Pentek7142', libsources)
-Default(libpentek7142)
+libpentek = env.Library('Pentek7142', libsources)
+Default(libpentek)
 
-env['DOXYFILE_DICT'].update({'PROJECT_NAME':'Pentek'})
+env['DOXYFILE_DICT'].update({'PROJECT_NAME':'Pentek7142'})
 html = env.Apidocs(libsources + headers)
 Default(html)
 
 thisdir = env.Dir('.').srcnode().abspath
 def Pentek7142(env):
-    env.AppendUnique(CPPPATH   =[thisdir,])
+    env.AppendUnique(CPPPATH = [thisdir])
     env.AppendLibrary('Pentek7142')
     env.AppendDoxref('Pentek7142')
     env.Require(tools)

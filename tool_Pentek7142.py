@@ -62,4 +62,5 @@ def Pentek7142(env):
 
 Export('Pentek7142')
 
+# Add build of the test programs before we exit...
 SConscript("test/SConscript")

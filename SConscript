@@ -1,2 +1,0 @@
-
-SConscript(dirs = 'test')

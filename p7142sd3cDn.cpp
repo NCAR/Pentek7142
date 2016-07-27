@@ -1753,7 +1753,7 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
         }
     }
     out << std::dec;
-    DLOG << out;
+    DLOG << out.str();
 }
 
 //////////////////////////////////////////////////////////////////////////////////

@@ -41,6 +41,8 @@ using namespace boost::posix_time;
 
 namespace Pentek {
 
+const double p7142sd3cDn::SPEED_OF_LIGHT = 2.99792458e8;      // m s-1
+
 ////////////////////////////////////////////////////////////////////////////////
 p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId, 
         uint32_t dmaDescSize, bool isBurst, int tsLength, double rx_delay,

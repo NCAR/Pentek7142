@@ -166,7 +166,7 @@ public:
     /// @return The receiver delay to first gate, in s
     double rcvrFirstGateDelay() const;
     
-    static const double SPEED_OF_LIGHT = 2.99792458e8;  // m s-1
+    static const double SPEED_OF_LIGHT;  // speed of light, m s-1
     
     /// @return The gate spacing, in m
     double gateSpacing() const;

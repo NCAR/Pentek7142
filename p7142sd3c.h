@@ -38,8 +38,6 @@
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-static const double SPEED_OF_LIGHT = 2.99792458e8;  // m s-1
-
 namespace Pentek {
 
 /// @brief A p7142 class specialized for cards running the SD3C firmware.

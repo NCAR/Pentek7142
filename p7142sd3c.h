@@ -482,7 +482,13 @@ public:
     /// @return The closest pulse number to a given time.
 
     int64_t pulseAtTime(boost::posix_time::ptime time) const;
-    
+
+    /// @brief Return true iff the zero position for motor quadrature counting
+    /// has been set.
+    /// @return true iff the zero position for motor quadrature counting
+    /// has been set.
+    bool motorZeroPositionSet() const; 
+
     /// @brief Momentarily set the "zero motor counts" bit in the TTL_OUT1
     /// register. This causes the firmware to zero the quadrature counts for all
     /// motors being monitored.
@@ -635,7 +641,7 @@ protected:
     /// Pointer to the sd3c transceiver control register in the fpga.
     uint32_t* tcvrCtrlReg;
 
-     /// Vector of delay/width pairs for our 8 SD3C timers
+    /// Vector of delay/width pairs for our 8 SD3C timers
     _TimerConfig _timerConfigs[N_SD3C_TIMERS];
     /// radar PRT in _adc_clock/2 counts
     unsigned int _prtCounts;
@@ -680,6 +686,8 @@ protected:
     bool _rim;
     /// The complimentary code length, if coding is being used
     int _codeLength;
+    /// Has motor position counting zero position been set?
+    bool _motorZeroPositionSet;
 };
 
 }

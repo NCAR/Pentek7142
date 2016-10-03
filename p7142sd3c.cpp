@@ -72,7 +72,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         _simulateDDCType(simulateDDCType),
         _externalStartTrigger(externalStartTrigger),
         _rim(rim),
-        _codeLength(codeLength) {
+        _codeLength(codeLength),
+        _motorZeroPositionSet(false) {
 
 	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 	// If the p7142 constructor had a problem, just return now
@@ -985,7 +986,12 @@ bool p7142sd3c::timerInvert(int timerNdx) const {
 
 //////////////////////////////////////////////////////////////////////
 int p7142sd3c::sd3cRev() const {
-	return(_sd3cRev);
+        return(_sd3cRev);
+}
+
+//////////////////////////////////////////////////////////////////////
+bool p7142sd3c::motorZeroPositionSet() const {
+        return(_motorZeroPositionSet);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -998,6 +1004,9 @@ void p7142sd3c::zeroMotorCounts() {
     TTLOut(regVal | 0x1);       // set the bit
     usleep(500);                // leave the bit high for 500 us
     TTLOut(regVal & 0xfffe);    // clear the bit
+
+    // Note that motor zero position has been set
+    _motorZeroPositionSet = true;
 }
 
 } // end namespace Pentek

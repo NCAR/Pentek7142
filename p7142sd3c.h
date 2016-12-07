@@ -60,7 +60,7 @@ public:
     /// The types of downconverters that can be instantiated in the SD3C Pentek 
     /// firmware.
     typedef enum {
-      DDC10DECIMATE, DDC8DECIMATE, DDC6DECIMATE, DDC4DECIMATE, BURST
+      DDCUNDEFINED, DDC10DECIMATE, DDC8DECIMATE, DDC6DECIMATE, DDC4DECIMATE, BURST
     } DDCDECIMATETYPE;
 
     /// @brief Constructor.

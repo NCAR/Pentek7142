@@ -586,41 +586,64 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     // After 1120 it's a 3-bit value in bits 13-15.
 
     int ddcTypeCode = 0;
+    int nTypeBits = 0;
 
     if ((ddcTypeAndRev & 0x1fff) >= 1120) {
-      // later version, type in 3 bits
+      // later version, type is 3 bits
+      nTypeBits = 3;
       ddcTypeCode = (ddcTypeAndRev & 0xE000) >> 13;
       _firmwareVersion = ddcTypeAndRev & 0x1fff;
     } else if ((ddcTypeAndRev & 0x3fff) > 502) {
-      // intermediate version, type in 2 bits
+      // intermediate version, type is 2 bits
+      nTypeBits = 2;
       ddcTypeCode = (ddcTypeAndRev & 0xC000) >> 14;
       _firmwareVersion = ddcTypeAndRev & 0x3fff;
     } else {
-      // early version, type in 1 bit
+      // early version, type is 1 bit
+      nTypeBits = 1;
       ddcTypeCode = (ddcTypeAndRev & 0x8000) >> 15;
       _firmwareVersion = ddcTypeAndRev & 0x7fff;
     }
 
-    DLOG << "Firmware version: " << _firmwareVersion;
-    DLOG << "DDC Type code: " << ddcTypeCode;
+    static DDCDECIMATETYPE oneBitMapping[] = {
+            DDC4DECIMATE,   // 0
+            DDC8DECIMATE    // 1
+    };
+    static DDCDECIMATETYPE twoBitMapping[] = {
+            DDC4DECIMATE,   // 0
+            DDC8DECIMATE,   // 1
+            DDC10DECIMATE,  // 2
+            BURST,          // 3
+    };
+    static DDCDECIMATETYPE threeBitMapping[] = {
+            DDC4DECIMATE,   // 0
+            DDCUNDEFINED,   // 1 (currently unused)
+            DDC8DECIMATE,   // 2
+            DDCUNDEFINED,   // 3 (currently unused)
+            DDC10DECIMATE,  // 4
+            DDCUNDEFINED,   // 5 (currently unused)
+            BURST,          // 6
+            DDC6DECIMATE    // 7
+    };
 
-    DDCDECIMATETYPE retval = DDC4DECIMATE;
-    switch (ddcTypeCode) {
-    case 0:
-    	retval = DDC4DECIMATE;
-        break;
+    DLOG << "Firmware version: " << _firmwareVersion;
+    DLOG << "DDC Type code (" << nTypeBits << "-bit): " << ddcTypeCode;
+
+    DDCDECIMATETYPE retval;
+    switch (nTypeBits) {
     case 1:
-    	retval = DDC8DECIMATE;
+        retval = oneBitMapping[ddcTypeCode];
         break;
     case 2:
-    	retval = DDC10DECIMATE;
+        retval = twoBitMapping[ddcTypeCode];
         break;
     case 3:
-    	retval = BURST;
-        break;     
-    case 7:
-    	retval = DDC6DECIMATE;
-        break;     
+        retval = threeBitMapping[ddcTypeCode];
+        break;
+    default:
+        ELOG << "Don't know how to handle " << nTypeBits <<
+                "-bit DDC type code!";
+        retval = DDCUNDEFINED;
     }
     
     return retval;

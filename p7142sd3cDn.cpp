@@ -1759,14 +1759,14 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142sd3cDn::ptMetadataLen() const {
-    // Extra metadata is only with DDC8 (for now)
+    // Extra metadata size
     switch (_sd3c._ddcType) {
     case p7142sd3c::DDC8DECIMATE:
         return(24); // 6 extra words (24 bytes) of metadata for DDC8
     case p7142sd3c::DDC10DECIMATE:
         return(24); // 6 extra words (24 bytes) of metadata for DDC10
     case p7142sd3c::DDC6DECIMATE:
-        return(24); // 6 extra words (24 bytes) of metadata for DDC8
+        return(24); // 6 extra words (24 bytes) of metadata for DDC6
     default:
         return(0);
     }

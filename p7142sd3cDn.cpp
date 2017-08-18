@@ -324,7 +324,7 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             ramSelect = (ii % 4) << 4;
             break;
         case p7142sd3c::BURST:   // Burst mode uses no filters
-            break;    
+            break;
         }
         
         // Try up to a few times to program this filter coefficient and
@@ -1759,14 +1759,23 @@ p7142sd3cDn::dumpSimFifo(std::string label, int n) {
 //////////////////////////////////////////////////////////////////////////////////
 int
 p7142sd3cDn::ptMetadataLen() const {
-    // Extra metadata size
+    // How much space is added per pulse for metadata?
     switch (_sd3c._ddcType) {
     case p7142sd3c::DDC8DECIMATE:
-        return(24); // 6 extra words (24 bytes) of metadata for DDC8
+        // DDC8 has 6 extra words (24 bytes) of metadata
+        return(24);
+        break;
     case p7142sd3c::DDC10DECIMATE:
-        return(24); // 6 extra words (24 bytes) of metadata for DDC10
+        // DDC10 (after rev. 535) has 6 extra words (24 bytes) of metadata
+        if (_sd3c.sd3cRev() <= 535) {
+            return(0);
+        } else {
+            return(24);
+        }
+        break;
     case p7142sd3c::DDC6DECIMATE:
-        return(24); // 6 extra words (24 bytes) of metadata for DDC6
+        // DDC6 has 6 extra words (24 bytes) of metadata
+        return(24);
     default:
         return(0);
     }

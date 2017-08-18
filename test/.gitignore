@@ -1,4 +1,5 @@
 *.o
 capture
 dactest
+sd3c_info_7142
 toggle_7142_leds

@@ -14,6 +14,7 @@ sources = Split("""
 capture.cpp
 dactest.cpp
 dacdump.cpp
+sd3c_info_7142.cpp
 toggle_7142_leds.cpp
 """)
 
@@ -23,16 +24,20 @@ headers = Split("""
 env = Environment(tools = ['default'] + tools)
 
 html = env.Apidocs(sources + headers)
+Default(html)
 
 capture = env.Program('capture', 'capture.cpp')
+Default(capture)
 
 dactest = env.Program('dactest', 'dactest.cpp')
+Default(dactest)
 
 dacdump = env.Program('dacdump', 'dacdump.cpp')
+# TODO dacdump does not currently compile!
+#Default(dacdump)
+
+sd3c_info_7142 = env.Program('sd3c_info_7142', 'sd3c_info_7142.cpp')
+Default(sd3c_info_7142)
 
 toggle_7142_leds = env.Program('toggle_7142_leds', 'toggle_7142_leds.cpp')
-
-# TODO dacdump does not currently compile!
-#Default(capture, dactest, dacdump, toggle_7142_leds, html)
-Default(capture, dactest, toggle_7142_leds, html)
-
+Default(toggle_7142_leds)

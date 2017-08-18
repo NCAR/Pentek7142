@@ -123,6 +123,11 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         case BURST:
           _adc_clock = 100.0e6;
           break;
+        default:
+          ELOG << "Unhandled DDC type " << ddcTypeName() << "!";
+          if (_abortOnError) {
+            abort();
+          }
       }
     } else {
       // set from the parameter passed in
@@ -130,8 +135,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     }
 
     // Announce the FPGA firmware revision
-    ILOG << "Card " << _cardIndex << " SD3C revision: " << std::dec << 
-            _sd3cRev;
+    ILOG << "7142 card " << _cardIndex << " has SD3C " <<
+    		ddcTypeName() << " rev. " << std::dec << _sd3cRev;
     if (_sd3cRev == 0) {
         std::cerr << "** WARNING: Revision number is zero. " <<
                 "Was the correct firmware loaded?" << std::endl;

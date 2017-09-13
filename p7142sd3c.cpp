@@ -91,7 +91,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         return;
     }
 
-    // Get the firmware revison and ddc type from the FPGA.
+    // Get the firmware revision and DDC type from the FPGA.
 	if (simulate) {
 		if (!_rim) {
 			_sd3cRev = 1;
@@ -197,7 +197,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     	// and if so, the number of sums performed by each of the paired
     	// integrators. If nsum > 1, then we are in coherent integrator mode.
     	// In this case, divide it in half, because thats the number that each
-    	// (even, odd pulse) integrator will nedd.
+    	// (even, odd pulse) integrator will need.
     	/// @todo Fix the VHDL code, so that it performs the division
     	/// by two, rather than doing it here.
     	P7142_REG_WRITE(_BAR2Base + CI_NSUM, (_nsum < 2 ? _nsum : _nsum/2));
@@ -221,8 +221,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     _prf2 = 1.0 / _prt2; // Hz
 
     // Sync pulse timer. Note that the width of this timer must be at least
-    // 140 ns to be recognized to be counted by the Acromag PMC730 Multi-IO
-    // card pulse counter, and this counter is used by the Ka-band radar!
+    // 140 ns to be counted by the Acromag PMC730 multi-IO card pulse counter,
+    // and this counter is used by the Ka-band radar.
     setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9), true);
     
     // tx pulse timer

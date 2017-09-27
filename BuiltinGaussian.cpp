@@ -114,16 +114,18 @@ unsigned int ddc4_2_667_pulsecode[] = {
 		4338, 4538, 4705, 4834, 4922, 4967 };
 
 // Gaussian filter coefficients for the decimate by 10 down converter
-unsigned int ddc10_0_5[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+unsigned int ddc10_0_500[] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 1, 10, 70, 385, 1584, 4914, 11487, 20233, 26853
-        };
+    };
 
 // Gaussian filter coefficients for the decimate by 10 down converter -- flat passband
-unsigned int ddc10_0_5_flat[] = {262125, 262080, 262044, 262042, 262095, 61, 198, 301, 299,
-                                 139, 261975, 261610, 261349, 261374, 261793, 418, 1301, 1907,
-                                 1828, 827, 261161, 259077, 257593, 257677, 260039, 2667, 9240,
-                                 16338, 22348, 25793
-};
+unsigned int ddc10_0_500_flat[] = {
+        262125, 262080, 262044, 262042, 262095, 61, 198, 301, 299,
+        139, 261975, 261610, 261349, 261374, 261793, 418, 1301, 1907,
+        1828, 827, 261161, 259077, 257593, 257677, 260039, 2667, 9240,
+        16338, 22348, 25793
+    };
 
 /////////////////////////////////////////////////////////////////////////////
 BuiltinGaussian::BuiltinGaussian() {
@@ -147,7 +149,7 @@ BuiltinGaussian::BuiltinGaussian() {
 	init("ddc4_1_333_pulsecode", ddc4_1_333_pulsecode, sizeof(ddc4_1_333_pulsecode) / sizeof(unsigned int));
 	init("ddc4_2_667_pulsecode", ddc4_2_667_pulsecode, sizeof(ddc4_2_667_pulsecode) / sizeof(unsigned int));
 
-    init("ddc10_0_5_flat", ddc10_0_5_flat, sizeof(ddc10_0_5_flat) / sizeof(unsigned int));
-    init("ddc10_0_5",      ddc10_0_5,      sizeof(ddc10_0_5)      / sizeof(unsigned int));
+    init("ddc10_0_500_flat", ddc10_0_500_flat, sizeof(ddc10_0_500_flat) / sizeof(unsigned int));
+    init("ddc10_0_500", ddc10_0_500, sizeof(ddc10_0_500) / sizeof(unsigned int));
 }
 

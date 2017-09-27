@@ -643,10 +643,10 @@ int p7142sd3cDn::filterSetup() {
             DLOG << "DDC4DECIMATE filterWidthUs: " << filterWidthUs;
             break;
         }
-        case p7142sd3c::DDC10DECIMATE: {    // pulse_width in 50 MHz counts
+        case p7142sd3c::DDC10DECIMATE: {
             pulsewidthUs = 0.5;
-//            gaussianFilterName = "ddc10_0_5";
-            gaussianFilterName = "ddc10_0_5_flat";
+//            gaussianFilterName = "ddc10_0_500";
+            gaussianFilterName = "ddc10_0_500_flat";
             break;
         }
         default: {

@@ -276,8 +276,10 @@ protected:
     /// The pulse number in the beam is checked for dropped beams.
     /// Data associated with synchronization errors will be skipped.
     /// The caller can access beamLength() bytes.
-    /// @param[out] nPulsesSinceStart: the number of pulses since the
+    /// @param[out] nPulsesSinceStart the number of pulses since the
     ///   xmitter was started up - allows computation of the time
+    /// @param[out] metaDataBuf return buffer for metadata of the beam
+    /// @param[in] bufLen the size of metaDataBuf
     ///
     /// The metaData will be stored in the buffer provided.
     /// This will contain angles, scan flags etc that are

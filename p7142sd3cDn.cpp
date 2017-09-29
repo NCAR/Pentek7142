@@ -171,10 +171,10 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     if (isSimulating()) {
     	interruptBytes =  32768;
     } else {
-    	interruptBytes = 65536; ///@todo This scheme needs to be revised once we get the windriver DMA working.
+    	interruptBytes = 65536; /// @todo This scheme needs to be revised once we get the windriver DMA working.
     }
 
-    double chanDataRate = (4 * _gates) / _sd3c.prt();   /// @TODO this only works for single PRT
+    double chanDataRate = (4 * _gates) / _sd3c.prt();   /// @todo this only works for single PRT
     _dataInterruptPeriod = interruptBytes / chanDataRate;
     if (p7142sd3cPtr->nsum() > 1) {
     	_dataInterruptPeriod /= (p7142sd3cPtr->nsum()/2);
@@ -325,6 +325,11 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             break;
         case p7142sd3c::BURST:   // Burst mode uses no filters
             break;
+        case p7142sd3c::DDCUNDEFINED:
+        default:
+            ELOG << "DDC type " << ddcTypeName() << " not handled at " <<
+                    __FUNCTION__ << ":" << __LINE__;
+            break;
         }
         
         // Try up to a few times to program this filter coefficient and
@@ -433,6 +438,11 @@ bool p7142sd3cDn::loadFilters(FilterSpec& gaussian, FilterSpec& kaiser) {
             break;
         case p7142sd3c::BURST:   // Burst mode uses no filters
             break;    
+        case p7142sd3c::DDCUNDEFINED:
+        default:
+            ELOG << "DDC type " << ddcTypeName() << " not handled at " <<
+                    __FUNCTION__ << ":" << __LINE__;
+            break;
         }
 
         /// @todo early versions of the gaussian filter programming required
@@ -527,6 +537,12 @@ int p7142sd3cDn::filterSetup() {
     if (_isBurst)
         return 0;
 
+    // Transmit pulsewidth rounded to the nearest integer nanosecond
+    long iPulsewidth_ns = lround(1.0e9 *
+            _sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)));
+    DLOG << "filterSetup(): " << _sd3c.ddcTypeName() << " iPulsewidth_ns is " <<
+            iPulsewidth_ns << " ns";
+
     // get the gaussian filter coefficients.
     FilterSpec gaussian;
     if (_gaussianFile.size() != 0) {
@@ -539,114 +555,103 @@ int p7142sd3cDn::filterSetup() {
             gaussian = g;
         }
     } else {
-        std::string gaussianFilterName;
+        std::string gaussianFilterName("");
         BuiltinGaussian builtins;
-        // The pulsewidth expressed in microseconds must match one of those
-        // available in BuiltinGaussian.
-        double pulsewidthUs = 1.00;
-        gaussianFilterName = "ddc8_1_0";
 
         // Choose the correct builtin Gaussian filter coefficient set.
         switch (_sd3c.ddcType()) {
         case p7142sd3c::DDC8DECIMATE: {
-            switch ((int)(_sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)) * 1.0e7)) {
-
-            case 2:                             //pulse width = 0.256 microseconds
-                pulsewidthUs = 0.256;
+            switch (iPulsewidth_ns) {
+            case 256:
                 gaussianFilterName = "ddc8_0_2";
                 break;
-            case 3:                             //pulse width = 0.384 microseconds
-                pulsewidthUs = 0.384;
+            case 384:
                 gaussianFilterName = "ddc8_0_3";
                 break;
-            case 5:
-                pulsewidthUs = 0.512;           //pulse width = 0.512 microseconds
+            case 512:
                 gaussianFilterName = "ddc8_0_5";
                 break;
-            case 6:                             //pulse width = 0.64 microseconds
-                pulsewidthUs = 0.64;
+            case 640:
                 gaussianFilterName = "ddc8_0_6";
                 break;
-            case 7:                             //pulse width = 0.768 microseconds
-                pulsewidthUs = 0.768;
+            case 768:
                 gaussianFilterName = "ddc8_0_7";
                 break;
-            case 8:                             //pulse width = 0.896 microseconds
-                pulsewidthUs = 0.896;
+            case 896:
                 gaussianFilterName = "ddc8_0_8";
                 break;
-            case 10:                            //pulse width = 1.024 microseconds
-                pulsewidthUs = 1.024;
+            case 1024:
                 gaussianFilterName = "ddc8_1_0";
                 break;
             default:
-                ELOG << "chip width specification of "
-                          << _sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)
-                          << " is not recognized, filter will be configured for a "
-                          << pulsewidthUs << " uS pulse\n";
+                ELOG << "No configured " << ddcTypeName() <<
+                        " Gaussian filter for a " << iPulsewidth_ns <<
+                        " ns pulse";
+                return(-1);
                 break;
             }
             break;
         }
         case p7142sd3c::DDC4DECIMATE: {
 
-            // Set a default filter spec, in case we don't have a set of coefficients for the
-        	// specified tx pulse. Note that the tx pulse width is the length of a coded pulse.
-        	double filterWidthUs = 1.00;
-            gaussianFilterName = "ddc4_1_000";
-
-            // Figure out the filter bandwidth, in milliseconds
-            int fwidth_ms = (int)(
-            		(_sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER))*1.0e9)/_sd3c.codeLength()
-            		);
+            // Filter width, in integer nanoseconds
+            int iFilterwidth_ns = iPulsewidth_ns / _sd3c.codeLength();
 
             // Find the gaussian filter coefficient set corresponding to this filter width
-            switch (fwidth_ms) {
+            switch (iFilterwidth_ns) {
 			case 500:
 				// 0.5 uS (75m gate) (24 counts)
-				filterWidthUs = 0.5;
 	            gaussianFilterName = "ddc4_0_500";
 				break;
 			case 666:
 				// 0.667 uS (100m gate) (32 counts)
-				filterWidthUs = 0.667;
 	            gaussianFilterName = "ddc4_0_667";
 				break;
 			case 1000:
 				// 1.0 uS (150m gate) (48 counts)
-				filterWidthUs = 1.00;
 				gaussianFilterName = "ddc4_1_000";
 				break;
 			case 1333:
 				// 1.333 uS (200m gate) (64 counts)
-				filterWidthUs = 1.333;
 				gaussianFilterName = "ddc4_1_333";
 				break;
 			case 2666:
 				// 2.667 uS (400m gate) (128 counts)
-				filterWidthUs = 2.667;
 				gaussianFilterName = "ddc4_2_667";
 				break;
 			default:
-				ELOG << "chip width specification of "
-					  << _sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER)/_sd3c.codeLength()
-					  << " (" << _sd3c.countsToTime(_sd3c.timerWidth(p7142sd3c::TX_PULSE_TIMER))/_sd3c.codeLength()
-					  << "s) is not recognized\n";
-				return -1;
-			break;
+	            ELOG << "No configured " << ddcTypeName() <<
+	                    " Gaussian filter for a " << iFilterwidth_ns <<
+	                    " ns filter";
+	            return(-1);
+				break;
             }
             if (_sd3c.codeLength() > 1) {
             	// If we are using pulse coding, choose the gaussian filter variant for that.
             	gaussianFilterName += "_pulsecode";
             }
 
-            DLOG << "DDC4DECIMATE filterWidthUs: " << filterWidthUs;
+            DLOG << "DDC4 filter width: " << iFilterwidth_ns << " ns";
             break;
         }
         case p7142sd3c::DDC10DECIMATE: {
-            pulsewidthUs = 0.5;
-//            gaussianFilterName = "ddc10_0_500";
-            gaussianFilterName = "ddc10_0_500_flat";
+            switch (iPulsewidth_ns) {
+            case 500:
+                // 0.5 us pulse
+//                gaussianFilterName = "ddc10_0_500";
+                gaussianFilterName = "ddc10_0_500_flat";
+                break;
+            case 1000:
+                // 1.0 us pulse
+                gaussianFilterName = "ddc10_1_000";
+                break;
+            default:
+                ELOG << "No configured " << ddcTypeName() <<
+                        " Gaussian filter for a " << iPulsewidth_ns <<
+                        " ns pulse";
+                return(-1);
+                break;
+            }
             break;
         }
         default: {
@@ -657,10 +662,14 @@ int p7142sd3cDn::filterSetup() {
         }
         }
 
+        if (gaussianFilterName.size() == 0) {
+            ELOG << "No configured " << ddcTypeName() <<
+                    " Gaussian filter for a " << iPulsewidth_ns << " ns pulse";
+            return(-1);
+        }
         if (builtins.find(gaussianFilterName) == builtins.end()) {
-            ELOG << "No entry for " << gaussianFilterName << ", "
-                    << pulsewidthUs
-                 << " us pulsewidth in the list of builtin Gaussian filters!";
+            ELOG << "No BuiltinGaussian entry for " << gaussianFilterName <<
+                    " (" << iPulsewidth_ns << " ns pulsewidth)!";
             return -1;
         }
         gaussian = FilterSpec(builtins[gaussianFilterName]);
@@ -717,7 +726,7 @@ int p7142sd3cDn::filterSetup() {
     if (!loadFilters(gaussian, kaiser)) {
       ELOG << "Unable to load filters";
       if (! usingInternalClock()) {
-        ELOG << "Is the external clock source connected?";
+        ELOG << "Is the external clock source connected to the Pentek?";
         ELOG << "Is the clock signal strength at least +3 dBm?";
       }
       return -1;

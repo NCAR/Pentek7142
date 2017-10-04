@@ -59,7 +59,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     int codeLength,
     double adc_clock,
     bool reset_clock_managers /* = true */,
-    bool abortOnError /* = true */) :
+    bool abortOnError /* = true */,
+    uint16_t sd3cTimerDivisor /* = 2 */) :
         p7142(simulate, simPauseMS, useFirstCard),
         _abortOnError(abortOnError),
         _constructorOk(true),
@@ -73,7 +74,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         _externalStartTrigger(externalStartTrigger),
         _rim(rim),
         _codeLength(codeLength),
-        _motorZeroPositionSet(false) {
+        _motorZeroPositionSet(false),
+        _sd3cTimerDivisor(sd3cTimerDivisor) {
 
 	boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 	// If the p7142 constructor had a problem, just return now
@@ -109,19 +111,19 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
       // Set the ADC clock rate based on DDC type
       switch (_ddcType) {
         case DDC10DECIMATE:
-          _adc_clock = 100.0e6;
+          _adcClock = 100.0e6;
           break;
         case DDC8DECIMATE:
-          _adc_clock = 125.0e6;
+          _adcClock = 125.0e6;
           break;
         case DDC6DECIMATE:
-          _adc_clock = 80.0e6;
+          _adcClock = 80.0e6;
           break;
         case DDC4DECIMATE:
-          _adc_clock = 48.0e6;
+          _adcClock = 48.0e6;
           break;
         case BURST:
-          _adc_clock = 100.0e6;
+          _adcClock = 100.0e6;
           break;
         default:
           ELOG << "Unhandled DDC type " << ddcTypeName() << "!";
@@ -131,15 +133,25 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
       }
     } else {
       // set from the parameter passed in
-      _adc_clock = adc_clock;
+      _adcClock = adc_clock;
     }
 
+    // Validate _sd3cTimerDivisor. We only accept values of 2, 4, 8, or 16.
+    if (_sd3cTimerDivisor != 2 && _sd3cTimerDivisor != 4 &&
+            _sd3cTimerDivisor != 8 && _sd3cTimerDivisor != 16) {
+        ELOG << "Bad SD3C timer divisor: " << _sd3cTimerDivisor <<
+                ". Only 2, 4, 8, and 16 are allowed.";
+        if (abortOnError) {
+            abort();
+        } else {
+            _constructorOk = false;
+        }
+    }
     // Announce the FPGA firmware revision
     ILOG << "7142 card " << _cardIndex << " has SD3C " <<
     		ddcTypeName() << " rev. " << std::dec << _sd3cRev;
     if (_sd3cRev == 0) {
-        std::cerr << "** WARNING: Revision number is zero. " <<
-                "Was the correct firmware loaded?" << std::endl;
+        WLOG << "SD3C revision number is 0. Was the correct firmware loaded?";
     }
 
     // Determine our operating mode. Use a heuristic here,
@@ -213,8 +225,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         usleep(p7142::P7142_IOCTLSLEEPUS);
     }
 
-    // Convert prt, prt2, tx_pulsewidth, and tx_delay into our local representation, 
-    // which is in units of (ADC clock counts / 2)
+    // Convert prt, prt2, tx_pulsewidth, and tx_delay into SD3C timer counts
     _prtCounts = timeToCounts(_prt);
     _prt2Counts = timeToCounts(_prt2);
     _prf = 1.0 / _prt;   // Hz
@@ -222,8 +233,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 
     // Sync pulse timer. Note that the width of this timer must be at least
     // 140 ns to be counted by the Acromag PMC730 multi-IO card pulse counter,
-    // and this counter is used by the Ka-band radar.
-    setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(140.e-9), true);
+    // and this counter is used by the Ka-band radar! We use 200 ns to be safe.
+    setTimer(MASTER_SYNC_TIMER, 0, timeToCounts(200.e-9), true);
     
     // tx pulse timer
     int txDelayCounts = timeToCounts(tx_delay);
@@ -255,13 +266,14 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  cardIndex: " << _cardIndex;
 
     DLOG << "  tx delay: "
-         << timerDelay(TX_PULSE_TIMER) << " adc_clock/2 counts" ;
+         << timerDelay(TX_PULSE_TIMER) << " SD3C clock counts" ;
     DLOG << "  tx pulse width: " 
-         << timerWidth(TX_PULSE_TIMER) << " adc_clock/2 counts";
-    DLOG << "  prtCounts: " << _prtCounts << " adc_clock/2 counts";
-    DLOG << "  prt2Counts: " << _prt2Counts << " adc_clock/2 counts";
+         << timerWidth(TX_PULSE_TIMER) << " SD3C clock counts";
+    DLOG << "  prtCounts: " << _prtCounts << " SD3C clock counts";
+    DLOG << "  prt2Counts: " << _prt2Counts << " SD3C clock counts";
     DLOG << "  staggered: " << ((_staggeredPrt) ? "true" : "false");
-    DLOG << "  adc clock: " << _adc_clock << " Hz";
+    DLOG << "  adc clock: " << _adcClock << " Hz";
+    DLOG << "  SD3C clock: " << 1.0 / countsToTime(1) << " Hz";
     DLOG << "  data rate: " << dataRate()/1.0e3 << " KB/s";
 
     DLOG << "=============================";
@@ -357,16 +369,14 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
 int
 p7142sd3c::timeToCounts(double time) const {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
-
-    return(lround(time * _adc_clock / 2));
+    return(lround(time * _sd3cFrequency()));
 }
 
 //////////////////////////////////////////////////////////////////////////////////
 double
 p7142sd3c::countsToTime(int counts) const {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
-
-    return((2 * counts) / _adc_clock);
+    return(counts / _sd3cFrequency());
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -746,24 +756,64 @@ p7142sd3c::initTimers() {
     
     if (periodCount > 65535) {
       ELOG << "********************** ERROR ****************************";
-      ELOG << "==>> initTimers() error, period count > 65536: " << periodCount;
+      ELOG << "==>> initTimers() error, period count > 65535: " << periodCount;
       ELOG << "     Cannot start timers";
+      ELOG << " ";
+      ELOG << "Consider increasing the sd3cTimerDivisor used when instantiating";
+      ELOG << "the p7142sd3c object. That will decrease the resolution of the";
+      ELOG << "SD3C timers, but will increase the maximum period that can be";
+      ELOG << "set for the timers (e.g., will allow a longer PRT).";
       ELOG << "*********************************************************";
       return false;
     }
 
-    // Control Register
-    P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | ALL_SD3C_TIMER_BITS);
-    usleep(p7142::P7142_IOCTLSLEEPUS);
-
-    // Enable Timer
-    P7142_REG_WRITE(_BAR2Base + MT_DATA, TIMER_ON);
-    usleep(p7142::P7142_IOCTLSLEEPUS);
-
-    // Turn on Write Strobes
+    // Turn on write strobes
     P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
-    
+
+    // Select the SD3C timer control register
+    P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
+
+    // Set the control register data:
+    //    o turn timers on
+    //    o set the chosen clock divider value for the timers
+    //
+    // WARNING: The control register clock divider macros are named w.r.t. the
+    // base SD3C clock frequency, which is ADC_clock_frequency/2 rather than
+    // ADC_clock_frequency. Hence the apparent factor-of-two discrepancy in the
+    // assignments below...
+    uint16_t controlRegData = 0;
+    controlRegData |= TIMER_ON;
+    switch (_sd3cTimerDivisor) {
+    case 2:
+        controlRegData |= CLK_DIV1;
+        break;
+    case 4:
+        controlRegData |= CLK_DIV2;
+        break;
+    case 8:
+        controlRegData |= CLK_DIV4;
+        break;
+    case 16:
+        controlRegData |= CLK_DIV8;
+        break;
+    default:
+        // This should have been caught in the constructor...
+        ELOG << "BUG: unsupported SD3C timer divisor " << _sd3cTimerDivisor;
+
+        // Turn off write strobes
+        P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_OFF);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
+
+        if (_abortOnError) {
+          abort();
+        }
+    }
+    P7142_REG_WRITE(_BAR2Base + MT_DATA, controlRegData);
+    usleep(p7142::P7142_IOCTLSLEEPUS);
+
+    // Set timer delay and width for each SD3C timer individually
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
         DLOG << "Initializing timer " << i << ": delay " <<
           countsToTime(timerDelay(i)) << "s (" << timerDelay(i) <<

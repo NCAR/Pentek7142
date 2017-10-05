@@ -272,8 +272,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  prtCounts: " << _prtCounts << " SD3C clock counts";
     DLOG << "  prt2Counts: " << _prt2Counts << " SD3C clock counts";
     DLOG << "  staggered: " << ((_staggeredPrt) ? "true" : "false");
-    DLOG << "  adc clock: " << _adcClock << " Hz";
-    DLOG << "  SD3C clock: " << 1.0 / countsToTime(1) << " Hz";
+    DLOG << "  adc clock: " << adcFrequency() << " Hz";
+    DLOG << "  SD3C clock: " << _sd3cFrequency() << " Hz";
     DLOG << "  data rate: " << dataRate()/1.0e3 << " KB/s";
 
     DLOG << "=============================";
@@ -814,10 +814,13 @@ p7142sd3c::initTimers() {
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
     // Set timer delay and width for each SD3C timer individually
+    DLOG << "ADC freq.: " << 1.0e-6 * adcFrequency() << " MHz, " <<
+            "SD3C freq.:" << 1.0e-6 * _sd3cFrequency() <<
+            " MHz (using ADC divisor " << _sd3cTimerDivisor << ")";
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
         DLOG << "Initializing timer " << i << ": delay " <<
-          countsToTime(timerDelay(i)) << "s (" << timerDelay(i) <<
-          "), width " << countsToTime(timerWidth(i)) << "s (" << 
+          countsToTime(timerDelay(i)) << " s (" << timerDelay(i) <<
+          "), width " << countsToTime(timerWidth(i)) << " s (" <<
           timerWidth(i) << ")" << (timerInvert(i)? ", inverted":"");
         
         // Delay Register

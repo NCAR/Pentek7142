@@ -210,11 +210,12 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // requested number of gates.
     if (! _isBurst) {
         uint32_t endOfRxGateTimer = rxGateDelayCounts + rxGateWidthCounts;
-        if ((prtCounts < endOfRxGateTimer) || (prt2Counts < endOfRxGateTimer)) {
+        if ((prtCounts < endOfRxGateTimer) ||
+            (prt2Counts && prt2Counts < endOfRxGateTimer)) {
             ELOG << "PRT(s) too short for rxGateDelay of " <<
-                    1.0e-6 * _sd3c.countsToTime(rxGateDelayCounts) <<
+                    1.0e6 * _sd3c.countsToTime(rxGateDelayCounts) <<
                     " us + " << _gates << " gates @ " <<
-                    1.0e-6 * oneGateAdcCounts / _sd3c.adcFrequency() <<
+                    1.0e6 * oneGateAdcCounts / _sd3c.adcFrequency() <<
                     " us/gate";
             if (_abortOnError) {
                 abort();
@@ -708,7 +709,9 @@ int p7142sd3cDn::filterSetup() {
         }
         case p7142sd3c::DDC10DECIMATE: {
             switch (iPulsewidth_ns) {
+            case 480:
             case 500:
+            case 520:
                 // 0.5 us pulse
 //                gaussianFilterName = "ddc10_0_500";
                 gaussianFilterName = "ddc10_0_500_flat";

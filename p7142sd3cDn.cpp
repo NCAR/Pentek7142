@@ -164,6 +164,9 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // boundary.
     int gateAlignedSd3cInterval =
             leastCommonMultiple(oneGateAdcCounts, sd3cTimerDivisor) / sd3cTimerDivisor;
+    DLOG << "PRT (and PRT2) must be a multiple of " <<
+            1.0e9 * _sd3c.countsToTime(gateAlignedSd3cInterval) <<
+            " ns for the given ADC clock and timer divisor values.";
 
     // Get PRTs in rounded SD3C timer counts and verify that they align on
     // both an SD3C timer clock boundary and on a gate boundary.

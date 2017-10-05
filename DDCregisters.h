@@ -123,14 +123,18 @@ Desc: Pentek 7142 HCR DDC Registers
 #define GPS_EN	  (0x1<<13)
 #define ADDR_TRIG (0x1<<15)
 
+#define TIMER_ENABLED  (0x1<<0)
+#define TIMER_DISABLED (0x0<<0)
+// TIMER_ON and TIMER_OFF are deprecated values; use TIMER_ENABLED and
+// TIMER_DISABLED instead
 #define TIMER_ON  (0x1<<0)
 #define TIMER_OFF (0x0<<0)
 #define TIMER_NEG (0x1<<1)
 #define TIMER_POS (0x0<<1)
-#define CLK_DIV1  (0x0<<2)
-#define CLK_DIV2  (0x1<<2)
-#define CLK_DIV4  (0x2<<2)
-#define CLK_DIV8  (0x3<<2)
+#define CLK_DIV1  (0x0<<3)
+#define CLK_DIV2  (0x1<<3)
+#define CLK_DIV4  (0x2<<3)
+#define CLK_DIV8  (0x3<<3)
 
 #define PRT1 (0x0<<0)
 #define PRT2 (0x0<<4)

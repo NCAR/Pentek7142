@@ -79,8 +79,8 @@ public:
     ///     nsum/2 beams and the odd beam integration will collect nsum/2 beams.
     /// @param freeRun If true, the firmware will be configured to ignore the 
     ///     PRT gating.
-    /// @param simulateDDCType The DDC type to use when running in simulation
-    ///     mode.
+    /// @param requiredDDCType the DDC type required to be in the Pentek's
+    ///     firmware.
     /// @param externalStartTrigger If true, an external trigger source
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar. This parameter used to have a default value of 
@@ -133,7 +133,7 @@ public:
     		unsigned int gates,
     		unsigned int nsum,
     		bool freeRun,
-    		DDCDECIMATETYPE simulateDDCType,
+    		DDCDECIMATETYPE requiredDDCType,
     		bool externalStartTrigger,
     		double simPauseMS,
     		bool useFirstCard,
@@ -553,6 +553,12 @@ protected:
      */
     static const unsigned int ALL_SD3C_TIMER_BITS;
 
+    /// @brief Return the name for the selected SD3C timer index
+    /// @param timerNdx the integer (or TimerIndex) index for the timer of
+    ///    interest
+    /// @return the name for the selected SD3C timer index
+    const std::string timerName(int timerNdx) const;
+
     /**
      * Return timer delay in counts for the selected timer. While
      * an integer index may be used explicitly, it is recommended to use
@@ -583,6 +589,16 @@ protected:
      */
     bool timerInvert(int timerNdx) const;
     
+    /**
+     * Return timer enabled state for the selected timer. While
+     * an integer index may be used explicitly, it is recommended to use
+     * a TimerIndex enumerated value instead.
+     * @param timerNdx the integer (or TimerIndex) index for the timer of
+     *     interest
+     * @return true if the timer is enabled
+     */
+    bool timerEnabled(int timerNdx) const;
+
     /// Set delay and width values for the selected timer. Note that values
     /// set here are not actually loaded onto the card until the timers are
     /// started with timersStartStop().
@@ -604,22 +620,26 @@ public:
 protected:
 
     /**
-     * Simple class to hold integer delay and width for a timer.
+     * Simple class to hold state of an SD3C timer
      */
     class _TimerConfig {
     public:
-        _TimerConfig(int delay, int width, bool invert) : 
+        _TimerConfig(int delay, int width, bool invert, bool enabled) :
            _delay(delay), 
            _width(width),
-           _invert(invert) {}
-        _TimerConfig() : _delay(0), _width(0), _invert(false) {}
+           _invert(invert),
+           _enabled(enabled) {}
+        _TimerConfig() : _delay(0), _width(0), _invert(false), _enabled(false) {}
         int delay() const { return _delay; }
         int width() const { return _width; }
         int invert() const { return _invert; }
+        bool enabled() const { return _enabled; }
+        void setEnabled(bool enabled) { _enabled = enabled; }
     private:
         int _delay;
         int _width;
         bool _invert;
+        bool _enabled;
     };
     
     /// The three operating modes: free run, pulse tag, coherent integration, and coherent integration with RIM.
@@ -659,6 +679,14 @@ protected:
     int32_t _timeToAdcCounts(double secs) {
         return(int32_t(rint(secs * _adcClock)));
     }
+
+    /// @brief Return the control register value for the selected timer based
+    /// on values currently in _timerConfigs.
+    /// @param timerIndex the integer (or TimerIndex) index for the timer of
+    ///    interest
+    /// @return the control register value for the selected timer based
+    /// on values currently in _timerConfigs.
+    uint16_t _timerControlRegData(int timerIndex) const;
 
     /// handling error behavior
     bool _abortOnError;  ///< set true if we abort on error rather than return
@@ -700,8 +728,6 @@ protected:
     int _firmwareVersion;
     /// DDC type instantiated in our card's firmware
     DDCDECIMATETYPE _ddcType;
-    /// DDC type to use when simulating (default DDC8DECIMATE).
-    DDCDECIMATETYPE _simulateDDCType;
     /// The SD3C firmware revision number
     int _sd3cRev;
     /// The three operating modes: free run, pulse tag and coherent integration

@@ -53,7 +53,7 @@ const ptime p7142sd3c::Epoch1970(boost::gregorian::date(1970, 1, 1),
 p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     double tx_pulsewidth, double prt, double prt2, bool staggeredPrt, 
     unsigned int gates, unsigned int nsum, bool freeRun, 
-    DDCDECIMATETYPE simulateDDCType, bool externalStartTrigger, double simPauseMS,
+    DDCDECIMATETYPE requiredDDCType, bool externalStartTrigger, double simPauseMS,
     bool useFirstCard,
     bool rim,
     int codeLength,
@@ -70,7 +70,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
         _prt2(prt2),
         _gates(gates),
         _nsum(nsum),
-        _simulateDDCType(simulateDDCType),
+        _ddcType(DDCUNDEFINED),
         _externalStartTrigger(externalStartTrigger),
         _rim(rim),
         _codeLength(codeLength),
@@ -100,11 +100,21 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 		} else {
 			_sd3cRev = 10007;
 		}
-		_ddcType = simulateDDCType;
-                _firmwareVersion = 0;
+		_ddcType = requiredDDCType;
+        _firmwareVersion = 0;
 	} else {
 		_sd3cRev = _unpackSd3cRev();
 		_ddcType = _unpackDdcType();
+		if (_ddcType != requiredDDCType) {
+		    ELOG << "Card's DDC type (" << ddcTypeName(_ddcType) <<
+		            ") != required DDC type (" <<
+		            ddcTypeName(requiredDDCType) << ")";
+	        if (abortOnError) {
+	            abort();
+	        } else {
+	            _constructorOk = false;
+	        }
+		}
 	}
     
     if (adc_clock == 0) {
@@ -147,6 +157,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
             _constructorOk = false;
         }
     }
+
     // Announce the FPGA firmware revision
     ILOG << "7142 card " << _cardIndex << " has SD3C " <<
     		ddcTypeName() << " rev. " << std::dec << _sd3cRev;
@@ -251,15 +262,15 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  simulate: " << simulate;
     DLOG << "  tx_delay: " << tx_delay;
     DLOG << "  tx_pulsewidth: " << tx_pulsewidth;
-    DLOG << "  prt: " << _prt;
-    DLOG << "  prt2: " << _prt2;
+    DLOG << "  prt: " << 1.0e6 * _prt << " us";
+    DLOG << "  prt2: " << 1.0e6 * _prt2 << " us";
     DLOG << "  prf: " << _prf << " Hz";
     DLOG << "  prf2: " << _prf2 << " Hz";
     DLOG << "  staggeredPrt: " << staggeredPrt;
     DLOG << "  gates: " << gates;
     DLOG << "  nsum: " << nsum;
     DLOG << "  freeRun: " << ((freeRun) ? "true" : "false");
-    DLOG << "  simulateDDCType: " << simulateDDCType;
+    DLOG << "  requiredDDCType: " << requiredDDCType;
     DLOG << "  externalStartTrigger: " << externalStartTrigger;
     DLOG << "  simPauseMS: " << simPauseMS;
     DLOG << "  useFirstCard: " << useFirstCard;
@@ -272,9 +283,9 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  prtCounts: " << _prtCounts << " SD3C clock counts";
     DLOG << "  prt2Counts: " << _prt2Counts << " SD3C clock counts";
     DLOG << "  staggered: " << ((_staggeredPrt) ? "true" : "false");
-    DLOG << "  adc clock: " << adcFrequency() << " Hz";
-    DLOG << "  SD3C clock: " << _sd3cFrequency() << " Hz";
-    DLOG << "  data rate: " << dataRate()/1.0e3 << " KB/s";
+    DLOG << "  adc clock: " << 1.0e-6 * adcFrequency() << " MHz";
+    DLOG << "  SD3C clock: " << 1.0e-6 * _sd3cFrequency() << " MHz";
+    DLOG << "  data rate: " << 1.0e-3 * dataRate() << " KB/s";
 
     DLOG << "=============================";
 
@@ -355,7 +366,7 @@ p7142sd3c::setTimer(TimerIndex ndx, int delay, int width, bool verbose, bool inv
         }
     }
 
-    _timerConfigs[ndx] = _TimerConfig(delay, width, invert);
+    _timerConfigs[ndx] = _TimerConfig(delay, width, invert, false);
 
     DLOG << "--------------------------";
     DLOG << "Setting up timer, ndx: " << ndx;
@@ -388,30 +399,20 @@ bool p7142sd3c::timersStartStop(bool start) {
         return true;
     }
 
-    // Load timer values before starting the timers
-    if (start) {
-      if (!initTimers()) {
+    // Set enabled/disabled state for all timers
+    for (int i = 0; i < N_SD3C_TIMERS; i++) {
+        _timerConfigs[i].setEnabled(start);
+    }
+
+    // (Re)initialize timers to establish enabled/disabled state
+    if (! initTimers()) {
         ELOG << "***** ERROR timersStartStop(), cannot init timers *****";
         return false;
-      }
     }
         
     // Turn on Write Strobes
     P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
-
-    // configure each timer
-    for (int i = 0; i < 8; i++) {
-	    // Control Register
-    	P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
-        usleep(p7142::P7142_IOCTLSLEEPUS);
-	
-	    // Enable/Disable Timer
-        unsigned int value =
-        		(start ? TIMER_ON : 0) | (timerInvert(i) ? TIMER_NEG : 0);
-        P7142_REG_WRITE(_BAR2Base + MT_DATA, value);
-        usleep(p7142::P7142_IOCTLSLEEPUS);
-    }
 
     // Get current time
     ptime now(microsec_clock::universal_time());
@@ -575,7 +576,7 @@ int p7142sd3c::_unpackSd3cRev() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
-        return _simulateDDCType;
+        return _ddcType;
 
     unsigned int ddcTypeAndRev = _sd3cTypeAndRev();
 
@@ -592,7 +593,7 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
-        return _simulateDDCType;
+        return _ddcType;
     
     unsigned int ddcTypeAndRev = _sd3cTypeAndRev();
 
@@ -703,8 +704,7 @@ p7142sd3c::initTimers() {
     int PrtScheme; // PRT Scheme for all Timers
 
     // Calculate the period and PRT Scheme for dual prt or single prt
-    // Note: _prtCounts and _prt2Counts are expressed in ADC_Clk/2 MHz Counts!
-    //       for DDC4: 24 MHz; for DDC8: 62.5 MHz
+    // Note: _prtCounts and _prt2Counts are expressed in SD3C Timer counts!
 
     int X, Y;
     double prt_ms, prt2_ms;
@@ -771,58 +771,26 @@ p7142sd3c::initTimers() {
     P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_ON);
     usleep(p7142::P7142_IOCTLSLEEPUS);
 
-    // Select the SD3C timer control register
-    P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG);
-    usleep(p7142::P7142_IOCTLSLEEPUS);
-
-    // Set the control register data:
-    //    o turn timers on
-    //    o set the chosen clock divider value for the timers
-    //
-    // WARNING: The control register clock divider macros are named w.r.t. the
-    // base SD3C clock frequency, which is ADC_clock_frequency/2 rather than
-    // ADC_clock_frequency. Hence the apparent factor-of-two discrepancy in the
-    // assignments below...
-    uint16_t controlRegData = 0;
-    controlRegData |= TIMER_ON;
-    switch (_sd3cTimerDivisor) {
-    case 2:
-        controlRegData |= CLK_DIV1;
-        break;
-    case 4:
-        controlRegData |= CLK_DIV2;
-        break;
-    case 8:
-        controlRegData |= CLK_DIV4;
-        break;
-    case 16:
-        controlRegData |= CLK_DIV8;
-        break;
-    default:
-        // This should have been caught in the constructor...
-        ELOG << "BUG: unsupported SD3C timer divisor " << _sd3cTimerDivisor;
-
-        // Turn off write strobes
-        P7142_REG_WRITE(_BAR2Base + MT_WR, WRITE_OFF);
-        usleep(p7142::P7142_IOCTLSLEEPUS);
-
-        if (_abortOnError) {
-          abort();
-        }
-    }
-    P7142_REG_WRITE(_BAR2Base + MT_DATA, controlRegData);
-    usleep(p7142::P7142_IOCTLSLEEPUS);
-
     // Set timer delay and width for each SD3C timer individually
     DLOG << "ADC freq.: " << 1.0e-6 * adcFrequency() << " MHz, " <<
             "SD3C freq.:" << 1.0e-6 * _sd3cFrequency() <<
             " MHz (using ADC divisor " << _sd3cTimerDivisor << ")";
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
-        DLOG << "Initializing timer " << i << ": delay " <<
-          countsToTime(timerDelay(i)) << " s (" << timerDelay(i) <<
-          "), width " << countsToTime(timerWidth(i)) << " s (" <<
-          timerWidth(i) << ")" << (timerInvert(i)? ", inverted":"");
-        
+        DLOG << "Initializing timer " << i << " (" << timerName(i) <<
+                "): delay " << countsToTime(timerDelay(i)) << " s (" <<
+                timerDelay(i) << "), width " << countsToTime(timerWidth(i)) <<
+                " s (" << timerWidth(i) << ")" <<
+                (timerInvert(i)? ", inverted" : "") <<
+                (timerEnabled(i)? ", enabled" : ", disabled");
+
+        // Control Register
+        // Address
+        P7142_REG_WRITE(_BAR2Base + MT_ADDR, CONTROL_REG | SD3C_TIMER_BITS[i]);
+        usleep(p7142::P7142_IOCTLSLEEPUS);
+        // Data
+        P7142_REG_WRITE(_BAR2Base + MT_DATA, _timerControlRegData(i));
+        usleep(p7142::P7142_IOCTLSLEEPUS);
+
         // Delay Register
         // Address
         P7142_REG_WRITE(_BAR2Base + MT_ADDR, DELAY_REG | SD3C_TIMER_BITS[i]);
@@ -831,7 +799,7 @@ p7142sd3c::initTimers() {
         P7142_REG_WRITE(_BAR2Base + MT_DATA, timerDelay(i));
         usleep(p7142::P7142_IOCTLSLEEPUS);
 
-        // Pulse Width Register
+        // Timer Width Register
         // Address
         P7142_REG_WRITE(_BAR2Base + MT_ADDR, WIDTH_REG | SD3C_TIMER_BITS[i]);
         usleep(p7142::P7142_IOCTLSLEEPUS);
@@ -1051,6 +1019,41 @@ int p7142sd3c::codeLength() const
 }
 
 //////////////////////////////////////////////////////////////////////
+const std::string
+p7142sd3c::timerName(int timerNdx) const {
+    switch (timerNdx) {
+    case MASTER_SYNC_TIMER:
+        return("MASTER_SYNC_TIMER");
+        break;
+    case RX_01_TIMER:
+        return("RX_01_TIMER");
+        break;
+    case TX_PULSE_TIMER:
+        return("TX_PULSE_TIMER");
+        break;
+    case GP_TIMER_0:
+        return("GP_TIMER_0");
+        break;
+    case RX_23_TIMER:
+        return("RX_23_TIMER");
+        break;
+    case GP_TIMER_1:
+        return("GP_TIMER_1");
+        break;
+    case GP_TIMER_2:
+        return("GP_TIMER_2");
+        break;
+    case GP_TIMER_3:
+        return("GP_TIMER_3");
+        break;
+    default:
+        // fall through
+        break;
+    }
+    return("UNKNOWN_TIMER");
+}
+
+//////////////////////////////////////////////////////////////////////
 int p7142sd3c::timerDelay(int timerNdx) const {
     return(_timerConfigs[timerNdx].delay());
 }
@@ -1063,6 +1066,11 @@ int p7142sd3c::timerWidth(int timerNdx) const {
 //////////////////////////////////////////////////////////////////////
 bool p7142sd3c::timerInvert(int timerNdx) const {
     return(_timerConfigs[timerNdx].invert());
+}
+
+//////////////////////////////////////////////////////////////////////
+bool p7142sd3c::timerEnabled(int timerNdx) const {
+    return(_timerConfigs[timerNdx].enabled());
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1088,6 +1096,47 @@ void p7142sd3c::zeroMotorCounts() {
 
     // Note that motor zero position has been set
     _motorZeroPositionSet = true;
+}
+
+uint16_t p7142sd3c::_timerControlRegData(int timerNdx) const {
+    uint16_t controlRegData = 0;
+
+    // Set the enabled/disabled state
+    controlRegData |=
+            _timerConfigs[timerNdx].enabled() ? TIMER_ENABLED : TIMER_DISABLED;
+
+    // Set the normal/inverted state
+    controlRegData |=
+            _timerConfigs[timerNdx].invert() ? TIMER_NEG : TIMER_POS;
+
+    // Set the clock divider
+    //
+    // WARNING: The control register clock divider macros in DDCregisters.h
+    // are named w.r.t. the base SD3C clock frequency, which is
+    // ADC_clock_frequency/2. Our _sd3cTimerDivisor member describes division
+    // w.r.t. ADC_clock frequency. Hence the apparent factor-of-two discrepancy
+    // in the assignments below...
+    switch (_sd3cTimerDivisor) {
+    case 2:
+        controlRegData |= CLK_DIV1;
+        break;
+    case 4:
+        controlRegData |= CLK_DIV2;
+        break;
+    case 8:
+        controlRegData |= CLK_DIV4;
+        break;
+    case 16:
+        controlRegData |= CLK_DIV8;
+        break;
+    default:
+        // This should have been caught in the constructor...
+        ELOG << "BUG: unsupported SD3C timer divisor " << _sd3cTimerDivisor;
+        abort();
+        break;
+    }
+
+    return(controlRegData);
 }
 
 } // end namespace Pentek

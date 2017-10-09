@@ -175,6 +175,8 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     uint32_t prt2Counts = _sd3c.prt2Counts();
     uint32_t remainder2Counts = prt2Counts % gateAlignedSd3cInterval;
     if (remainderCounts != 0 || remainder2Counts != 0) {
+        ELOG << "prtCounts, remainderCounts: " << prtCounts << ", " << remainderCounts;
+        ELOG << "prt2Counts, remainder2Counts: " << prt2Counts << ", " << remainder2Counts;
         ELOG << "PRT (and PRT2) must be a multiple of " <<
                 1.0e9 * _sd3c.countsToTime(gateAlignedSd3cInterval) <<
                 " ns for the given ADC clock and timer divisor values.";

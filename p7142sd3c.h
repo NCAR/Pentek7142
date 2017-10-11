@@ -617,6 +617,13 @@ public:
     /// If _freerun is true, set the FREERUN bit in the
     /// transceiver control register. Otherwise clear it.
     void loadFreeRun();
+
+    /// @brief Return the default ADC clock frequency for the given
+    /// DDCDECIMATETYPE.
+    /// @param ddcType the DDCDECIMATETYPE of interest
+    /// @return the default ADC clock frequency for the given DDCDECIMATETYPE.
+    static double DefaultAdcFrequency(DDCDECIMATETYPE ddcType);
+
 protected:
 
     /**

@@ -118,29 +118,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
 	}
     
     if (adc_clock == 0) {
-      // Set the ADC clock rate based on DDC type
-      switch (_ddcType) {
-        case DDC10DECIMATE:
-          _adcClock = 100.0e6;
-          break;
-        case DDC8DECIMATE:
-          _adcClock = 125.0e6;
-          break;
-        case DDC6DECIMATE:
-          _adcClock = 80.0e6;
-          break;
-        case DDC4DECIMATE:
-          _adcClock = 48.0e6;
-          break;
-        case BURST:
-          _adcClock = 100.0e6;
-          break;
-        default:
-          ELOG << "Unhandled DDC type " << ddcTypeName() << "!";
-          if (_abortOnError) {
-            abort();
-          }
-      }
+      _adcClock = DefaultAdcFrequency(_ddcType);
     } else {
       // set from the parameter passed in
       _adcClock = adc_clock;
@@ -1137,6 +1115,31 @@ uint16_t p7142sd3c::_timerControlRegData(int timerNdx) const {
     }
 
     return(controlRegData);
+}
+
+double
+p7142sd3c::DefaultAdcFrequency(DDCDECIMATETYPE ddcType) {
+    // Return the default ADC clock rate based on DDC type
+    switch (ddcType) {
+      case DDC10DECIMATE:
+        return(100.0e6);    // DDC10 -> 100 MHz
+        break;
+      case DDC8DECIMATE:
+        return(125.0e6);    // DDC8 -> 125 MHz
+        break;
+      case DDC6DECIMATE:
+        return(80.0e6);     // DDC6 -> 80 MHz
+        break;
+      case DDC4DECIMATE:
+        return(48.0e6);     // DDC4 -> 48 MHz
+        break;
+      case BURST:
+        return(100.0e6);
+        break;
+      default:
+        ELOG << "Unhandled DDC type " << ddcTypeName(ddcType) << "!";
+    }
+    return(NAN);
 }
 
 } // end namespace Pentek

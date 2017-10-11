@@ -79,8 +79,8 @@ public:
     ///     nsum/2 beams and the odd beam integration will collect nsum/2 beams.
     /// @param freeRun If true, the firmware will be configured to ignore the 
     ///     PRT gating.
-    /// @param simulateDDCType The DDC type to use when running in simulation
-    ///     mode.
+    /// @param requiredDDCType the DDC type required to be in the Pentek's
+    ///     firmware.
     /// @param externalStartTrigger If true, an external trigger source
     ///     (generally a 1 PPS signal from a GPS clock) is used to start the 
     ///     radar. This parameter used to have a default value of 
@@ -117,6 +117,12 @@ public:
     ///     Set true if you want the constructor to abort on error
     ///     Set false if you want the constructor to return on error
     ///     after setting _constructorOk to false
+    /// @param sd3cTimerDivisor Divisor to use for SD3C's internal timer
+    ///     clock w.r.t. the ADC clock. Allowed values are 2, 4, 8, and 16.
+    ///     SD3C's internal timers use a clock divided down from the ADC clock.
+    ///     Increasing this value reduces the time resolution of the SD3C
+    ///     timers, but allows for larger maximum time intervals. (Maximum
+    ///     timer interval allowed is 65535 * the timer's resolution.)
     p7142sd3c(
     		bool simulate,
     		double tx_delay,
@@ -127,15 +133,16 @@ public:
     		unsigned int gates,
     		unsigned int nsum,
     		bool freeRun,
-    		DDCDECIMATETYPE simulateDDCType,
+    		DDCDECIMATETYPE requiredDDCType,
     		bool externalStartTrigger,
     		double simPauseMS,
     		bool useFirstCard,
     		bool rim,
     		int codeLength,
-                double adc_clock,
-                bool reset_clock_managers = true,
-                bool abortOnError = true
+    		double adc_clock,
+    		bool reset_clock_managers = true,
+    		bool abortOnError = true,
+    		uint16_t sd3cTimerDivisor = 2
     		);
     
     /// Destructor.
@@ -190,20 +197,20 @@ public:
     /// @brief Return the ADC clock frequency in Hz.
     /// @return The ADC clock frequency in Hz.
     double adcFrequency() const {
-        return _adc_clock;
+        return _adcClock;
     }
     
-    /// @brief Convert a time in seconds to integer timer counts, which are in units
-    /// of (2 / _adc_clock).
+    /// @brief Convert the given time in seconds to the nearest integer SD3C
+    /// internal timer counts.
     /// @ param time the time to be converted, in seconds
-    /// @ return the time in integer timer counts, which are in units of
-    /// (2 / _adc_clock) seconds.
+    /// @ return the nearest integer SD3C internal timer counts for the given
+    /// time
     int timeToCounts(double time) const;
     
-    /// @brief Convert a time in (2 / _adc_clock) integer timer counts to
+    /// @brief Convert a time in integer SD3C internal timer counts to
     /// a time in seconds.
-    /// @ param time the time to be converted, in (2 / _adc_clock) counts.
-    /// @ return the time in seconds.
+    /// @ param time the time to be converted, in SD3C internal timer counts.
+    /// @ return the equivalent time in seconds
     double countsToTime(int counts) const;
     
     /// @brief Start or stop the 8 SD3C timers.
@@ -228,9 +235,9 @@ public:
         return countsToTime(_prtCounts);
     }
     
-    /// @brief Return the first PRT, in units of (2 / adcFrequency())
-    /// @return The first PRT, in units of (2 / adcFrequency())
-    unsigned int prtCounts() const {
+    /// @brief Return the first PRT, in SD3C internal timer counts
+    /// @return The first PRT, in SD3C internal timer counts
+    uint32_t prtCounts() const {
         return _prtCounts;
     }
     
@@ -242,11 +249,11 @@ public:
         return countsToTime(_prt2Counts);
     }
     
-    /// @brief Return the second PRT, in units of (2 / adcFrequency()), or
-    ///     zero if not running staggered PRT.
-    /// @return The second PRT, in units of (2 / adcFrequency()), or
-    ///     zero if not running staggered PRT.
-    unsigned int prt2Counts() const {
+    /// @brief Return the second PRT in SD3C internal timer counts, or zero
+    /// if not running staggered PRT.
+    /// @return the second PRT in SD3C internal timer counts, or zero
+    /// if not running staggered PRT.
+    uint32_t prt2Counts() const {
         return(_staggeredPrt ? _prt2Counts : 0);
     }
     
@@ -546,6 +553,12 @@ protected:
      */
     static const unsigned int ALL_SD3C_TIMER_BITS;
 
+    /// @brief Return the name for the selected SD3C timer index
+    /// @param timerNdx the integer (or TimerIndex) index for the timer of
+    ///    interest
+    /// @return the name for the selected SD3C timer index
+    const std::string timerName(int timerNdx) const;
+
     /**
      * Return timer delay in counts for the selected timer. While
      * an integer index may be used explicitly, it is recommended to use
@@ -576,6 +589,16 @@ protected:
      */
     bool timerInvert(int timerNdx) const;
     
+    /**
+     * Return timer enabled state for the selected timer. While
+     * an integer index may be used explicitly, it is recommended to use
+     * a TimerIndex enumerated value instead.
+     * @param timerNdx the integer (or TimerIndex) index for the timer of
+     *     interest
+     * @return true if the timer is enabled
+     */
+    bool timerEnabled(int timerNdx) const;
+
     /// Set delay and width values for the selected timer. Note that values
     /// set here are not actually loaded onto the card until the timers are
     /// started with timersStartStop().
@@ -589,30 +612,34 @@ protected:
     /// Load configured timer values onto the device.
     /// @return true if successful, false otherwise.
     bool initTimers();
-    
+
+public:
     /// If _freerun is true, set the FREERUN bit in the
     /// transceiver control register. Otherwise clear it.
-public:
     void loadFreeRun();
 protected:
 
     /**
-     * Simple class to hold integer delay and width for a timer.
+     * Simple class to hold state of an SD3C timer
      */
     class _TimerConfig {
     public:
-        _TimerConfig(int delay, int width, bool invert) : 
+        _TimerConfig(int delay, int width, bool invert, bool enabled) :
            _delay(delay), 
            _width(width),
-           _invert(invert) {}
-        _TimerConfig() : _delay(0), _width(0), _invert(false) {}
+           _invert(invert),
+           _enabled(enabled) {}
+        _TimerConfig() : _delay(0), _width(0), _invert(false), _enabled(false) {}
         int delay() const { return _delay; }
         int width() const { return _width; }
         int invert() const { return _invert; }
+        bool enabled() const { return _enabled; }
+        void setEnabled(bool enabled) { _enabled = enabled; }
     private:
         int _delay;
         int _width;
         bool _invert;
+        bool _enabled;
     };
     
     /// The three operating modes: free run, pulse tag, coherent integration, and coherent integration with RIM.
@@ -634,6 +661,33 @@ protected:
     /// @return the unpacked sd3c firmware revision number.
     int _unpackSd3cRev();
 
+    /// @brief Return the SD3C internal clock frequency in Hz.
+    ///
+    /// By default, the SD3C internal clock frequency is half of the ADC clock
+    /// frequency, but this is further divided by the SD3C_CLOCK_DIVIDER
+    /// specified at time of construction.
+    /// @return the SD3C internal clock frequency in Hz.
+    double _sd3cFrequency() const {
+        return(_adcClock / _sd3cTimerDivisor);
+    }
+
+    /// @brief Return the nearest integer number of ADC clock frequency cycles
+    /// in the given time.
+    /// @param secs the time to be converted, in seconds
+    /// @return the nearest integer number of ADC clock frequency cycles
+    /// in the given time.
+    int32_t _timeToAdcCounts(double secs) {
+        return(int32_t(rint(secs * _adcClock)));
+    }
+
+    /// @brief Return the control register value for the selected timer based
+    /// on values currently in _timerConfigs.
+    /// @param timerIndex the integer (or TimerIndex) index for the timer of
+    ///    interest
+    /// @return the control register value for the selected timer based
+    /// on values currently in _timerConfigs.
+    uint16_t _timerControlRegData(int timerIndex) const;
+
     /// handling error behavior
     bool _abortOnError;  ///< set true if we abort on error rather than return
     bool _constructorOk; ///< true if the constructor was successful, false otherwise
@@ -643,9 +697,9 @@ protected:
 
     /// Vector of delay/width pairs for our 8 SD3C timers
     _TimerConfig _timerConfigs[N_SD3C_TIMERS];
-    /// radar PRT in _adc_clock/2 counts
+    /// radar PRT in sd3c_clock() counts
     unsigned int _prtCounts;
-    /// second PRT of staggered PRT in _adc_clock/2 counts
+    /// second PRT of staggered PRT in sd3c_clock() counts
     unsigned int _prt2Counts;
     /// Staggered PRT flag. If true, both PRT values are used in staggered
     /// mode.
@@ -656,7 +710,7 @@ protected:
     /// Time of the first xmit pulse.
     boost::posix_time::ptime _radarStartTime;
     /// The adc clock rate in Hz
-    double _adc_clock;
+    double _adcClock;
     /// The prt in seconds
     double _prt;
     /// The dual prt in seconds
@@ -674,8 +728,6 @@ protected:
     int _firmwareVersion;
     /// DDC type instantiated in our card's firmware
     DDCDECIMATETYPE _ddcType;
-    /// DDC type to use when simulating (default DDC8DECIMATE).
-    DDCDECIMATETYPE _simulateDDCType;
     /// The SD3C firmware revision number
     int _sd3cRev;
     /// The three operating modes: free run, pulse tag and coherent integration
@@ -688,6 +740,8 @@ protected:
     int _codeLength;
     /// Has motor position counting zero position been set?
     bool _motorZeroPositionSet;
+    /// SD3C clock divisor setting w.r.t. the ADC clock
+    uint16_t _sd3cTimerDivisor;
 };
 
 }

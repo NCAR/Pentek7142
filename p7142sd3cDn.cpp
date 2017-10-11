@@ -44,6 +44,35 @@ namespace Pentek {
 const double p7142sd3cDn::SPEED_OF_LIGHT = 2.99792458e8;      // m s-1
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief Return the least common multiple of the two given integers.
+/// @param a the first integer for comparison
+/// @param b the second integer for comparison
+/// @return the least common multiple of a and b
+static int
+leastCommonMultiple(int a, int b) {
+    // First find the greatest common divisor of a and b.
+    int gcd;
+    int c = a;
+    int d = b;
+    while (true) {
+        if (c == 0) {
+            gcd = d;
+            break;
+        }
+        d %= c;
+        if (d == 0) {
+            gcd = c;
+            break;
+        }
+        c %= d;
+    }
+
+    // Now get LCM of a and b
+    int lcm = gcd ? ((a * b) / gcd) : 0;
+    return(lcm);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId, 
         uint32_t dmaDescSize, bool isBurst, int tsLength, double rx_delay,
         double rx_pulsewidth, std::string gaussianFile, std::string kaiserFile,
@@ -79,6 +108,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // Get gate count and coherent integration sum count from our card
     _gates = _sd3c.gates();
     _nsum = _sd3c.nsum();
+    uint16_t sd3cTimerDivisor = _sd3c._sd3cTimerDivisor;
     
     // log startup params in debug mode
 
@@ -99,52 +129,105 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     DLOG << "  nsum: " << _nsum;
     DLOG << "++++++++++++++++++++++++++++";
 
-    // Convert our rx delay and width to counts.
-    int rxDelayCounts = _sd3c.timeToCounts(rx_delay);
-    int rxPulsewidthCounts = _sd3c.timeToCounts(rx_pulsewidth);
+    // Gating quantum period in ADC clock counts. SD3C decimates by its
+    // DDC-specific factor before delivering data, so the DDC writes decimated
+    // data to the output FIFO at this interval in ADC clock counts.
+    // Note that burst channels always use a decimation factor of 2.
+    uint16_t gateQuantumAdcCounts = _isBurst ? 2 : _sd3c.ddcDecimation();
 
-    // Make sure the rx_pulsewidth is a multiple of the time per decimated
-    // sample.
-    if (rxPulsewidthCounts == 0 ||
-            ((2 * rxPulsewidthCounts) % _sd3c.ddcDecimation()) != 0) {
-      ELOG << "rx_pulsewidth (digitizer_sample_width) must be a " <<
-        "non-zero multiple of " <<
-        1.0e9 * _sd3c.ddcDecimation() / _sd3c.adcFrequency() <<
-        " ns for " << _sd3c.ddcTypeName();
-      if (_abortOnError) {
-        abort();
-      }
-      _constructorOk = false;
+    // Make sure the time per gate is a non-zero multiple of the gating quantum
+    // period. We work in ADC counts here because timing for an individual
+    // gate is constrained by the ADC clock, but NOT by the SD3C timer
+    // clock (which is a factor of 2 or more slower).
+    int32_t oneGateAdcCounts = _sd3c._timeToAdcCounts(rx_pulsewidth);
+    if ((oneGateAdcCounts / gateQuantumAdcCounts) == 0 ||
+            (oneGateAdcCounts % gateQuantumAdcCounts) != 0) {
+        ELOG << (_isBurst ? "burst " : "") <<
+                "rx_pulsewidth (digitizer_sample_width) must be a multiple of " <<
+                1.0e9 * gateQuantumAdcCounts / _sd3c.adcFrequency() <<
+                " ns for " << _sd3c.ddcTypeName();
+        if (_abortOnError) {
+            abort();
+        } else {
+            _constructorOk = false;
+        }
     }
-    
-    // PRT must be a multiple of the pulse width and longer than
-    // (gates + 1) * pulse width
-    if (!_isBurst) {
-      if ((_sd3c.prtCounts() % rxPulsewidthCounts)) {
-        ELOG << "Rx pulse width must divide into PRT";
-        ELOG << "rxPulsewidthCounts, prtCounts: "
-             << rxPulsewidthCounts << ", " << _sd3c.prtCounts();
+
+    // Burst channel is funky: we sample as fast as possible for a period of
+    // the rx_pulsewidth (i.e., oneGateAdcCounts). Adjust _gates now if
+    // necessary to reflect the number of samples we'll actually get.
+    if (_isBurst) {
+        _gates = oneGateAdcCounts / gateQuantumAdcCounts;
+    }
+
+    // Get the interval between SD3C timer counts which align to a gate
+    // boundary.
+    int gateAlignedSd3cInterval =
+            leastCommonMultiple(oneGateAdcCounts, sd3cTimerDivisor) / sd3cTimerDivisor;
+    DLOG << "PRT (and PRT2) must be a multiple of " <<
+            1.0e9 * _sd3c.countsToTime(gateAlignedSd3cInterval) <<
+            " ns for the given ADC clock and timer divisor values.";
+
+    // Get PRTs in rounded SD3C timer counts and verify that they align on
+    // both an SD3C timer clock boundary and on a gate boundary.
+    uint32_t prtCounts = _sd3c.prtCounts();
+    uint32_t remainderCounts = prtCounts % gateAlignedSd3cInterval;
+    uint32_t prt2Counts = _sd3c.prt2Counts();
+    uint32_t remainder2Counts = prt2Counts % gateAlignedSd3cInterval;
+    if (remainderCounts != 0 || remainder2Counts != 0) {
+        ELOG << "prtCounts, remainderCounts: " << prtCounts << ", " << remainderCounts;
+        ELOG << "prt2Counts, remainder2Counts: " << prt2Counts << ", " << remainder2Counts;
+        ELOG << "PRT (and PRT2) must be a multiple of " <<
+                1.0e9 * _sd3c.countsToTime(gateAlignedSd3cInterval) <<
+                " ns for the given ADC clock and timer divisor values.";
         if (_abortOnError) {
-          abort();
+            abort();
+        } else {
+            _constructorOk = false;
         }
-        _constructorOk = false;
-      }
-      if (_sd3c.prtCounts() <= ((_sd3c.gates() + 1) * rxPulsewidthCounts)) {
-        ELOG << "PRT ERROR";
-        ELOG << "PRT: " << _sd3c.prt() << " sec, "
-             <<  _sd3c.prtCounts() << " counts";
-        ELOG << "rx pulse width: " 
-             << _sd3c.countsToTime(rxPulsewidthCounts) << " sec, "
-             << rxPulsewidthCounts << " counts";
-        ELOG << "n gates: " << _sd3c.gates();
-        ELOG << "rx pulse width: " << rx_pulsewidth;
-        ELOG << "PRT must be greater than (gates+1)*(rx pulse width)";
-        ELOG << "Min valid PRT: " << ((_sd3c.gates()+1) * rx_pulsewidth);
-        if (_abortOnError) {
-          abort();
+    }
+
+    // Get the receiver gate timer delay (rcvr_gate0_delay) in rounded SD3C
+    // timer counts, then adjust the count up if necessary to make sure the
+    // delay ends at a gate boundary.
+    int32_t rxGateDelayCounts = _sd3c.timeToCounts(rx_delay);
+    remainderCounts = rxGateDelayCounts % gateAlignedSd3cInterval;
+    if (remainderCounts != 0) {
+        rxGateDelayCounts += gateAlignedSd3cInterval - remainderCounts;
+        WLOG << "rx_gate0_delay adjusted up for alignment: requested delay " <<
+                1.0e9 * rx_delay << " ns -> actual delay " <<
+                1.0e9 * _sd3c.countsToTime(rxGateDelayCounts) << " ns";
+    }
+
+    // Calculate the receiver gate timer width in SD3C timer counts. We
+    // get the needed time in ADC counts and divide down to SD3C counts.
+    // If the ADC counts do not divide evenly into the SD3C counts,
+    // adjust the next SD3C count.
+    uint32_t rxGateWidthAdcCounts =
+            _isBurst ? oneGateAdcCounts : _gates * oneGateAdcCounts;
+    uint32_t rxGateWidthCounts = rxGateWidthAdcCounts / sd3cTimerDivisor; // ADC counts -> SD3C counts
+    uint32_t remainderAdcCounts = rxGateWidthAdcCounts % sd3cTimerDivisor;
+    if (remainderAdcCounts != 0) {
+        rxGateWidthCounts++;
+    }
+
+    // Make sure the PRT is long enough for the receiver delay plus the
+    // requested number of gates.
+    if (! _isBurst) {
+        uint32_t endOfRxGateTimer = rxGateDelayCounts + rxGateWidthCounts;
+        if ((prtCounts < endOfRxGateTimer) ||
+            (prt2Counts && prt2Counts < endOfRxGateTimer)) {
+            ELOG << "PRT(s) too short for rxGateDelay of " <<
+                    1.0e6 * _sd3c.countsToTime(rxGateDelayCounts) <<
+                    " us + " << _gates << " gates @ " <<
+                    1.0e6 * oneGateAdcCounts / _sd3c.adcFrequency() <<
+                    " us/gate";
+            if (_abortOnError) {
+                abort();
+            } else {
+                _constructorOk = false;
+            }
         }
-        _constructorOk = false;
-      }
     }
 
     // Set the rx gating timer. 
@@ -154,12 +237,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // over the given pulse width, and set _gates to the correct value here.
     p7142sd3c::TimerIndex rxTimerNdx = (_chanId <= 1) ? 
             p7142sd3c::RX_01_TIMER : p7142sd3c::RX_23_TIMER;
-    if (_isBurst) {
-        _gates = rxPulsewidthCounts;
-        _sd3c.setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts);
-    } else {
-        _sd3c.setTimer(rxTimerNdx, rxDelayCounts, rxPulsewidthCounts * _gates);
-    }
+    _sd3c.setTimer(rxTimerNdx, rxGateDelayCounts, rxGateWidthCounts);
     
     /// @todo Estimate the period between data-available interrupts based on the
     /// configured interrupt buffer length. This is a good first-order estimate
@@ -206,7 +284,7 @@ p7142sd3cDn::p7142sd3cDn(p7142sd3c * p7142sd3cPtr, int chanId,
     // Set the bypass divider (decimation) for our receiver channel
     // ** This establishes the gate width in the downconverter. **
     int bypassOk = _isBurst ?
-            setBypassDivider(2) : setBypassDivider(2 * rxPulsewidthCounts);
+            setBypassDivider(2) : setBypassDivider(oneGateAdcCounts);
     if (!bypassOk) {
         ELOG << "Failed to set decimation for channel " << _chanId;
         if (_abortOnError) {
@@ -636,7 +714,9 @@ int p7142sd3cDn::filterSetup() {
         }
         case p7142sd3c::DDC10DECIMATE: {
             switch (iPulsewidth_ns) {
+            case 480:
             case 500:
+            case 520:
                 // 0.5 us pulse
 //                gaussianFilterName = "ddc10_0_500";
                 gaussianFilterName = "ddc10_0_500_flat";

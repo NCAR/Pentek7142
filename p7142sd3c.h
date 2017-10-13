@@ -683,8 +683,17 @@ protected:
     /// @param secs the time to be converted, in seconds
     /// @return the nearest integer number of ADC clock frequency cycles
     /// in the given time.
-    int32_t _timeToAdcCounts(double secs) {
+    int32_t _timeToAdcCounts(double secs) const {
         return(int32_t(rint(secs * _adcClock)));
+    }
+
+    /// @brief Return the time in seconds for the given number of ADC clock
+    /// counts
+    /// @param adcCounts the number of ADC counts to convert to time
+    /// @return the time in seconds for the given number of ADC clock
+    /// counts
+    double _adcCountsToTime(int32_t adcCounts) const {
+        return(adcCounts / _adcClock);
     }
 
     /// @brief Return the control register value for the selected timer based

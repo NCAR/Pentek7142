@@ -275,6 +275,14 @@ namespace Pentek {
                 return(_upconverter);
             }
 
+            /// @brief Return a pointer to this card's upconverter, or null if
+            /// there is no upconverter.
+            /// @return a pointer to this card's upconverter, or null if
+            /// there is no upconverter.
+            p7142Up* upconverter() {
+                return(_upconverter);
+            }
+
             /// Reset the digital clock managers on the FPGA. Necessary since
             /// some of the new DCMs we add in the firmware use the
             /// CLKFX output, which won't lock at startup. <em>Downconverters

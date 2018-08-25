@@ -264,6 +264,7 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  adc clock: " << 1.0e-6 * adcFrequency() << " MHz";
     DLOG << "  SD3C clock: " << 1.0e-6 * _sd3cFrequency() << " MHz";
     DLOG << "  data rate: " << 1.0e-3 * dataRate() << " KB/s";
+    DLOG << "  timerDivisor: " << _sd3cTimerDivisor;
 
     DLOG << "=============================";
 

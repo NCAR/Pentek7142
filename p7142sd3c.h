@@ -611,7 +611,7 @@ protected:
     
     /// Load configured timer values onto the device.
     /// @return true if successful, false otherwise.
-    bool initTimers();
+    bool initTimers(bool isStart = false);
 
 public:
     /// If _freerun is true, set the FREERUN bit in the

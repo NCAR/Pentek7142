@@ -244,6 +244,8 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
     DLOG << "  prt2: " << 1.0e6 * _prt2 << " us";
     DLOG << "  prf: " << _prf << " Hz";
     DLOG << "  prf2: " << _prf2 << " Hz";
+    DLOG << "  prtCounts: " << _prtCounts << " SD3C clock counts";
+    DLOG << "  prt2Counts: " << _prt2Counts << " SD3C clock counts";
     DLOG << "  staggeredPrt: " << staggeredPrt;
     DLOG << "  gates: " << gates;
     DLOG << "  nsum: " << nsum;
@@ -258,8 +260,6 @@ p7142sd3c::p7142sd3c(bool simulate, double tx_delay,
          << timerDelay(TX_PULSE_TIMER) << " SD3C clock counts" ;
     DLOG << "  tx pulse width: " 
          << timerWidth(TX_PULSE_TIMER) << " SD3C clock counts";
-    DLOG << "  prtCounts: " << _prtCounts << " SD3C clock counts";
-    DLOG << "  prt2Counts: " << _prt2Counts << " SD3C clock counts";
     DLOG << "  staggered: " << ((_staggeredPrt) ? "true" : "false");
     DLOG << "  adc clock: " << 1.0e-6 * adcFrequency() << " MHz";
     DLOG << "  SD3C clock: " << 1.0e-6 * _sd3cFrequency() << " MHz";
@@ -384,9 +384,9 @@ bool p7142sd3c::timersStartStop(bool start) {
     }
 
     // (Re)initialize timers to establish enabled/disabled state
-    if (! initTimers()) {
-        ELOG << "***** ERROR timersStartStop(), cannot init timers *****";
-        return false;
+    if (! initTimers(start)) {
+      ELOG << "***** ERROR timersStartStop(), cannot init timers *****";
+      return false;
     }
         
     // Turn on Write Strobes
@@ -671,7 +671,7 @@ p7142sd3c::loadFreeRun() {
 
 /////////////////////////////////////////////////////////////////////////
 bool
-p7142sd3c::initTimers() {
+p7142sd3c::initTimers(bool isStart) {
     boost::recursive_mutex::scoped_lock guard(_p7142Mutex);
 
     if (_simulate)
@@ -679,8 +679,8 @@ p7142sd3c::initTimers() {
 
     //    This section initializes the timers.
 
-    int periodCount; // Period Count for all Timers
-    int PrtScheme; // PRT Scheme for all Timers
+    int periodCount = 0; // Period Count for all Timers
+    int PrtScheme = 0; // PRT Scheme for all Timers
 
     // Calculate the period and PRT Scheme for dual prt or single prt
     // Note: _prtCounts and _prt2Counts are expressed in SD3C Timer counts!
@@ -688,7 +688,12 @@ p7142sd3c::initTimers() {
     int X, Y;
     double prt_ms, prt2_ms;
 
-    DLOG << "===================== initTimers =======================";
+    if (isStart) {
+      DLOG << "===================== initTimers =======================";
+    } else {
+      DLOG << "===================== stopping Timers =======================";
+    }
+
     if (_staggeredPrt == true) {
         // dual prt
         prt_ms = countsToTime(_prtCounts) * 1000;
@@ -708,19 +713,23 @@ p7142sd3c::initTimers() {
 
         char text[128];
 
-        DLOG << "Staggered periodCount: " << periodCount;
-        DLOG << "Staggered, PrtScheme: " << PrtScheme;
-        sprintf(text, "  prt_ms:    %.12f", prt_ms);
-        DLOG << text;
-        sprintf(text, "  prt2_ms:   %.12f", prt2_ms);
-        DLOG << text;
-        sprintf(text, "  prt_ratio: %.12f", prt_ratio);
-        DLOG << text;
-        DLOG << "  rounded_ratio: " << rounded_ratio;
-        sprintf(text, "  xx, yy: %.12f, %.12f", xx, yy);
-        DLOG << text;
-        DLOG << "  X, Y: " << X << ", " << Y;
-
+        if (isStart) {
+          DLOG << "_prtCounts: " << _prtCounts;
+          DLOG << "_prt2Counts: " << _prt2Counts;
+          sprintf(text, "  prt_ms:    %.12f", prt_ms);
+          DLOG << text;
+          sprintf(text, "  prt2_ms:   %.12f", prt2_ms);
+          DLOG << text;
+          sprintf(text, "  prt_ratio: %.12f", prt_ratio);
+          DLOG << text;
+          DLOG << "Staggered periodCount: " << periodCount;
+          DLOG << "Staggered, PrtScheme: " << PrtScheme;
+          DLOG << "  rounded_ratio: " << rounded_ratio;
+          sprintf(text, "  xx, yy: %.12f, %.12f", xx, yy);
+          DLOG << text;
+          DLOG << "  X, Y: " << X << ", " << Y;
+        }
+          
     } else {
 
         // Single prt
@@ -728,12 +737,16 @@ p7142sd3c::initTimers() {
         periodCount = _prtCounts;
         PrtScheme = 0x0000;
 
-        DLOG << "Non-staggered periodCount is " << periodCount;
+        if (isStart) {
+          DLOG << "Non-staggered periodCount is " << periodCount;
+        }
 
     }
-    DLOG << "========================================================";
+    if (isStart) {
+      DLOG << "========================================================";
+    }
     
-    if (periodCount > 65535) {
+    if (isStart && periodCount > 65535) {
       ELOG << "********************** ERROR ****************************";
       ELOG << "==>> initTimers() error, period count > 65535: " << periodCount;
       ELOG << "     Cannot start timers";
@@ -755,7 +768,7 @@ p7142sd3c::initTimers() {
             "SD3C freq.:" << 1.0e-6 * _sd3cFrequency() <<
             " MHz (using ADC divisor " << _sd3cTimerDivisor << ")";
     for (unsigned int i = 0; i < N_SD3C_TIMERS; i++) {
-        DLOG << "Initializing timer " << i << " (" << timerName(i) <<
+        DLOG << "Timer " << i << " (" << timerName(i) <<
                 "): delay " << countsToTime(timerDelay(i)) << " s (" <<
                 timerDelay(i) << "), width " << countsToTime(timerWidth(i)) <<
                 " s (" << timerWidth(i) << ")" <<

@@ -51,7 +51,6 @@ Default(libpentek)
 
 env['DOXYFILE_DICT'].update({'PROJECT_NAME':'Pentek7142'})
 html = env.Apidocs(libsources + headers)
-Default(html)
 
 thisdir = env.Dir('.').srcnode().abspath
 def Pentek7142(env):

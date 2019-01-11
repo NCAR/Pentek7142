@@ -24,7 +24,6 @@ headers = Split("""
 env = Environment(tools = ['default'] + tools)
 
 html = env.Apidocs(sources + headers)
-Default(html)
 
 capture = env.Program('capture', 'capture.cpp')
 Default(capture)

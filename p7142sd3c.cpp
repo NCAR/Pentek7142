@@ -564,6 +564,9 @@ int p7142sd3c::_unpackSd3cRev() {
     int retval = ((ddcTypeAndRev & 0x3fff) > 502) ?
         (ddcTypeAndRev & 0x3fff) : (ddcTypeAndRev & 0x7fff);
 
+	DLOG << "ddcTypeAndRev: 0x" << std::hex << ddcTypeAndRev
+		 << "; unpacked sd3cRev: 0x" << retval
+		 << " (" << std::dec << retval << ")";
     return retval;
 }
 
@@ -579,11 +582,18 @@ p7142sd3c::DDCDECIMATETYPE p7142sd3c::_unpackDdcType() {
     // Up to rev 502, DDC type was a 1-bit value at bit 15.
     // After 502 it's a 2-bit value in bits 14-15.
     // After 1120 it's a 3-bit value in bits 13-15.
+	// Except if rev is over 10000, then it's a special firmware
+	// version indicating Profiler RIM with 2 DDC type bits.
 
     int ddcTypeCode = 0;
     int nTypeBits = 0;
 
-    if ((ddcTypeAndRev & 0x1fff) >= 1120) {
+    if ((ddcTypeAndRev & 0x3fff) >= 10000) {
+	  DLOG << "looks like RIM firmware, using 2 bits for DDC type";
+      nTypeBits = 2;
+      ddcTypeCode = (ddcTypeAndRev & 0xC000) >> 14;
+      _firmwareVersion = ddcTypeAndRev & 0x3fff;
+	} else if ((ddcTypeAndRev & 0x1fff) >= 1120) {
       // later version, type is 3 bits
       nTypeBits = 3;
       ddcTypeCode = (ddcTypeAndRev & 0xE000) >> 13;
